@@ -1,8 +1,9 @@
 /**
- * Membuat templates/template.docx — dokumen master berisi tag docxtemplater
- * ({tag}, {#loop}...{/loop}, {#kondisi}...{/kondisi}) yang nanti diisi oleh
- * aplikasi web (docxtemplater, berjalan di browser pengguna) memakai data
- * dari form.
+ * Membuat templates/template.docx — replika presisi dari format PAK Integrasi
+ * dan PAK Konversi yang dikirim pengguna (font Cambria, kop dengan logo asli,
+ * struktur tabel bernomor romawi, dsb), ditambah placeholder barcode
+ * (docxtemplater-image-module-free, tag {%barcode}) berisi NIP + Nama untuk
+ * verifikasi keaslian dokumen.
  *
  * Jalankan: node scripts/build-template.js
  */
@@ -10,133 +11,169 @@ const fs = require("fs");
 const path = require("path");
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  WidthType, AlignmentType, BorderStyle, PageBreak, HeadingLevel,
-  VerticalAlign, ShadingType,
+  WidthType, AlignmentType, BorderStyle, PageBreak, VerticalAlign,
+  VerticalMergeType, ShadingType, ImageRun, TableLayoutType,
 } = require("docx");
 
-const FONT = "Arial";
-const SZ = 20; // 10pt
-const SZ_TITLE = 24; // 12pt
+const FONT = "Cambria";
+const LOGO_PATH = path.join(__dirname, "..", "assets", "logo-buton.png");
 
-function cellBorders() {
-  const b = { style: BorderStyle.SINGLE, size: 4, color: "000000" };
-  return { top: b, bottom: b, left: b, right: b };
-}
-
+// ---------- util dasar ----------
 function txt(text, opts = {}) {
-  return new TextRun({ text: String(text), font: FONT, size: opts.size || SZ, bold: !!opts.bold, italics: !!opts.italics });
+  return new TextRun({
+    text: String(text), font: FONT,
+    size: opts.size || 22, // 11pt default (sesuai docDefaults dokumen asli)
+    bold: !!opts.bold,
+  });
 }
-
 function p(children, opts = {}) {
   return new Paragraph({
     children: Array.isArray(children) ? children : [children],
     alignment: opts.alignment || AlignmentType.LEFT,
-    spacing: opts.spacing || { after: 40 },
-    heading: opts.heading,
+    spacing: opts.spacing !== undefined ? opts.spacing : { after: 0 },
+    indent: opts.indent,
+  });
+}
+function pageBreakPara() { return new Paragraph({ children: [new PageBreak()] }); }
+function noBorders() {
+  const n = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+  return { top: n, bottom: n, left: n, right: n, insideHorizontal: n, insideVertical: n };
+}
+function cellBorders() {
+  const b = { style: BorderStyle.SINGLE, size: 4, color: "000000" };
+  return { top: b, bottom: b, left: b, right: b };
+}
+function grayShade() { return { type: ShadingType.SOLID, color: "D9D9D9", fill: "D9D9D9" }; }
+function cell(children, opts = {}) {
+  return new TableCell({
+    width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
+    columnSpan: opts.colSpan,
+    verticalMerge: opts.vMerge,
+    borders: cellBorders(),
+    shading: opts.shade ? grayShade() : undefined,
+    verticalAlign: opts.vAlign || VerticalAlign.CENTER,
+    margins: { top: 40, bottom: 40, left: 80, right: 80 },
+    children: (Array.isArray(children) ? children : [children]).map((c) =>
+      typeof c === "string" ? p(txt(c, opts.textOpts), { alignment: opts.align || AlignmentType.LEFT }) : c
+    ),
   });
 }
 
-function pageBreakPara() {
-  return new Paragraph({ children: [new PageBreak()] });
-}
+// ---------- KOP SURAT (logo asli + barcode, garis rapat) ----------
+function kopSurat() {
+  let logoImage;
+  try {
+    const logoData = fs.readFileSync(LOGO_PATH);
+    logoImage = new ImageRun({ data: logoData, transformation: { width: 55, height: 78 }, type: "png" });
+  } catch (e) {
+    logoImage = null;
+  }
 
-function kopSurat(pemdaTag, opdTag, alamatTag) {
-  return [
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
-      rows: [
-        new TableRow({
+  const rows = [
+    new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 850, type: WidthType.DXA },
+          borders: noBorders(),
+          verticalAlign: VerticalAlign.TOP,
+          children: [new Paragraph({ children: logoImage ? [logoImage] : [txt("")], alignment: AlignmentType.CENTER })],
+        }),
+        new TableCell({
+          width: { size: 7850, type: WidthType.DXA },
+          borders: noBorders(),
+          verticalAlign: VerticalAlign.CENTER,
           children: [
-            new TableCell({
-              width: { size: 15, type: WidthType.PERCENTAGE },
-              borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
-              children: [p(txt("[LOGO]", { size: SZ, italics: true }), { alignment: AlignmentType.CENTER })],
-              verticalAlign: VerticalAlign.CENTER,
-            }),
-            new TableCell({
-              width: { size: 85, type: WidthType.PERCENTAGE },
-              borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
-              children: [
-                p(txt(`{${pemdaTag}}`, { size: SZ_TITLE, bold: true }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
-                p(txt(`{${opdTag}}`, { size: SZ_TITLE + 4, bold: true }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
-                p(txt(`{${alamatTag}}`, { size: SZ }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
-              ],
-              verticalAlign: VerticalAlign.CENTER,
-            }),
+            p(txt("PEMERINTAH KABUPATEN BUTON", { size: 36 }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
+            p(txt("{kopOPD}", { size: 36, bold: true }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
+            p(txt("{kopAlamat}", { size: 24 }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
           ],
+        }),
+        new TableCell({
+          width: { size: 1100, type: WidthType.DXA },
+          borders: noBorders(),
+          verticalAlign: VerticalAlign.CENTER,
+          children: [new Paragraph({ children: [txt("{%barcode}")], alignment: AlignmentType.CENTER })],
         }),
       ],
     }),
+  ];
+
+  return [
+    new Table({
+      width: { size: 9800, type: WidthType.DXA },
+      layout: TableLayoutType.FIXED,
+      columnWidths: [850, 7850, 1100],
+      borders: noBorders(),
+      rows,
+    }),
+    // garis pemisah kop — border langsung menempel pada paragraf kosong tipis,
+    // supaya jaraknya rapat ke teks kop (bukan baris underscore terpisah)
     new Paragraph({
-      border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: "000000" } },
-      spacing: { after: 200 },
-      children: [new TextRun({ text: "", size: SZ })],
+      spacing: { before: 20, after: 160 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 10, color: "000000", space: 1 } },
+      children: [txt("", { size: 4 })],
     }),
   ];
 }
 
-function judulDok(judul, subjudul) {
-  const arr = [p(txt(judul, { size: SZ_TITLE, bold: true }), { alignment: AlignmentType.CENTER })];
-  if (subjudul) arr.push(p(txt(subjudul, { size: SZ, bold: true }), { alignment: AlignmentType.CENTER }));
-  return arr;
+function judulDok(judul, nomorLine) {
+  const out = [p(txt(judul, { size: 24, bold: true }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } })];
+  if (nomorLine) {
+    out.push(p(txt(nomorLine), { alignment: AlignmentType.CENTER, spacing: { after: 160 } }));
+  } else {
+    out.push(p(txt(""), { spacing: { after: 160 } }));
+  }
+  return out;
 }
 
-function dataPegawaiTable(prefix = "") {
-  const rows = [
-    ["Nama", `{nama}`],
-    ["NIP", `{nip}`],
-    ["Nomor Seri Karpeg", `{karpeg}`],
-    ["Tempat/Tgl Lahir", `{ttl}`],
-    ["Jenis Kelamin", `{jenisKelamin}`],
-    ["Pendidikan", `{pendidikan}`],
-    ["Pangkat/Golongan Ruang/TMT", `{pangkatGolongan} / {tmtPangkat}`],
-    ["Jabatan/TMT", `{jabatan} / {tmtJabatan}`],
-    ["Masa Kerja Golongan", `{masaKerjaGolongan}`],
-    ["Unit Kerja", `{unitKerja}`],
-    ["Instansi", `{instansi}`],
-  ];
+// Baris "Instansi : ... / Periode : ..." format SATU BARIS (dipakai di halaman
+// Akumulasi & Penetapan)
+function instansiPeriodeInline(instansiTag, periodeTag) {
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    columnWidths: [500, 5000, 500, 4300],
-    rows: rows.map((r, i) => new TableRow({
-      children: [
-        new TableCell({ width: { size: 500, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(String(i + 1)))] }),
-        new TableCell({ width: { size: 5000, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(r[0]))] }),
-        new TableCell({ width: { size: 500, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(":"))] }),
-        new TableCell({ width: { size: 4300, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(r[1]))] }),
-      ],
-    })),
-  });
-}
-
-function ttdBlok(tempatTag, tanggalTag, jabatanPenilaiTag, namaPenilaiTag, nipPenilaiTag) {
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
+    width: { size: 100, type: WidthType.PERCENTAGE }, layout: TableLayoutType.FIXED,
+    borders: noBorders(),
     rows: [
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
-            borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
+            width: { size: 5500, type: WidthType.DXA },
+            borders: noBorders(),
+            children: [p([txt("Instansi : "), txt(`{${instansiTag}}`)], { spacing: { after: 160 } })],
+          }),
+          new TableCell({
+            width: { size: 3800, type: WidthType.DXA },
+            borders: noBorders(),
+            children: [p([txt("Periode : "), txt(`{${periodeTag}}`)], { alignment: AlignmentType.RIGHT, spacing: { after: 160 } })],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+// Baris "Instansi :" / value (baris baru) — kiri, dan "Periode :" / value —
+// kanan, format DUA BARIS (dipakai di halaman Konversi & Integrasi)
+function instansiPeriodeDuaBaris(instansiLabel, instansiTag, periodeLabel, periodeTag) {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE }, layout: TableLayoutType.FIXED,
+    borders: noBorders(),
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 5000, type: WidthType.DXA },
+            borders: noBorders(),
             children: [
-              p(txt("ASLI Penetapan Angka Kredit untuk :", { bold: true })),
-              p(txt("Jabatan Fungsional yang bersangkutan")),
+              p(txt(`${instansiLabel} :`), { spacing: { after: 0 } }),
+              p(txt(`{${instansiTag}}`), { spacing: { after: 160 } }),
             ],
           }),
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
-            borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
+            width: { size: 4300, type: WidthType.DXA },
+            borders: noBorders(),
             children: [
-              p(txt(`Ditetapkan di ${"{" + tempatTag + "}"}`), { alignment: AlignmentType.LEFT }),
-              p(txt(`Pada tanggal {${tanggalTag}}`)),
-              p(txt("")),
-              p(txt(`{${jabatanPenilaiTag}}`, { bold: true })),
-              p(txt("")),
-              p(txt("")),
-              p(txt(`{${namaPenilaiTag}}`, { bold: true })),
-              p(txt(`NIP {${nipPenilaiTag}}`)),
+              p(txt(`${periodeLabel} :`), { alignment: AlignmentType.RIGHT, spacing: { after: 0 } }),
+              p(txt(`{${periodeTag}}`), { alignment: AlignmentType.RIGHT, spacing: { after: 160 } }),
             ],
           }),
         ],
@@ -145,294 +182,468 @@ function ttdBlok(tempatTag, tanggalTag, jabatanPenilaiTag, namaPenilaiTag, nipPe
   });
 }
 
-function tembusan() {
+// ---------- Tabel data pegawai (dengan nomor urut) ----------
+function headerRowFull(text, colCount) {
+  return new TableRow({
+    children: [cell(text, { colSpan: colCount, align: AlignmentType.CENTER, textOpts: { bold: true } })],
+  });
+}
+
+// fields: [ [label, tag], ... ]  -> tag sudah termasuk "{...}"
+function pegawaiTableBernomor(fields, withRomanI) {
+  const rows = [];
+  if (withRomanI) {
+    rows.push(new TableRow({
+      children: [
+        cell("I", { width: 500, align: AlignmentType.CENTER }),
+        cell("KETERANGAN PERORANGAN", { colSpan: 3, align: AlignmentType.CENTER, textOpts: { bold: true } }),
+      ],
+    }));
+    fields.forEach(([label, tagExpr], i) => {
+      rows.push(new TableRow({
+        children: [
+          cell("", { width: 500 }),
+          cell(String(i + 1), { width: 500, align: AlignmentType.CENTER }),
+          cell(label, { width: 3300 }),
+          cell(tagExpr, { width: 4500 }),
+        ],
+      }));
+    });
+    return new Table({
+      width: { size: 8800, type: WidthType.DXA },
+      layout: TableLayoutType.FIXED,
+      columnWidths: [500, 500, 3300, 4500],
+      rows,
+    });
+  }
+  fields.forEach(([label, tagExpr], i) => {
+    rows.push(new TableRow({
+      children: [
+        cell(String(i + 1), { width: 500, align: AlignmentType.CENTER }),
+        cell(label, { width: 3800 }),
+        cell(tagExpr, { width: 4700 }),
+      ],
+    }));
+  });
+  return new Table({
+    width: { size: 9000, type: WidthType.DXA },
+    layout: TableLayoutType.FIXED,
+    columnWidths: [500, 3800, 4700],
+    rows,
+  });
+}
+
+// Tabel pegawai TANPA nomor urut (dipakai di Integrasi halaman 1)
+function pegawaiTableTanpaNomor(fields) {
+  const rows = [
+    new TableRow({ children: [cell("PEJABAT FUNGSIONAL YANG DINILAI", { colSpan: 2, align: AlignmentType.CENTER, textOpts: { bold: true } })] }),
+  ];
+  fields.forEach(([label, tagExpr]) => {
+    rows.push(new TableRow({
+      children: [
+        cell(label, { width: 4000 }),
+        cell(tagExpr, { width: 5000 }),
+      ],
+    }));
+  });
+  return new Table({
+    width: { size: 9000, type: WidthType.DXA },
+    layout: TableLayoutType.FIXED,
+    columnWidths: [4000, 5000],
+    rows,
+  });
+}
+function signatureBlock(tempatTag, tanggalTag, jabatanExpr, namaTag, nipTag) {
+  const indent = { left: 5000 };
   return [
-    p(txt("Tembusan disampaikan kepada:")),
-    p(txt("1. {tembusan1}")),
-    p(txt("2. {tembusan2}")),
-    p(txt("3. {tembusan3}")),
+    p(txt(""), { spacing: { before: 200, after: 0 } }),
+    p([txt("Ditetapkan di "), txt(`{${tempatTag}}`)], { indent, spacing: { after: 0 } }),
+    p([txt("Pada tanggal "), txt(`{${tanggalTag}}`)], { indent, spacing: { after: 0 } }),
+    p(txt(jabatanExpr), { indent, spacing: { after: 480 } }),
+    p(txt(`{${namaTag}}`, { bold: true }), { indent, spacing: { after: 0 } }),
+    p([txt("NIP "), txt(`{${nipTag}}`)], { indent, spacing: { after: 200 } }),
   ];
 }
 
-// ---------- SECTION: PAK INTEGRASI (opsional) ----------
+function tembusanBlok(withAsli, tag1, tag2, tag3) {
+  const out = [];
+  if (withAsli) {
+    out.push(p([txt("ASLI", { bold: true }), txt(" Penetapan Angka Kredit untuk :")], { spacing: { after: 0 } }));
+    out.push(p(txt("Jabatan Fungsional yang bersangkutan"), { spacing: { after: 160 } }));
+  }
+  out.push(p(txt("Tembusan disampaikan kepada:"), { spacing: { after: 60 } }));
+  out.push(p(txt(`1. {${tag1}}`), { spacing: { after: 0 } }));
+  out.push(p(txt(`2. {${tag2}}`), { spacing: { after: 0 } }));
+  out.push(p(txt(`3. {${tag3}}`), { spacing: { after: 0 } }));
+  return out;
+}
+
+const FIELDS_9 = [
+  ["Nama", "{nama}"],
+  ["NIP", "{nip}"],
+  ["Nomor Seri Karpeg", "{karpeg}"],
+  ["Tempat/Tgl Lahir", "{ttl}"],
+  ["Jenis Kelamin", "{jenisKelamin}"],
+  ["Pangkat/Golongan Ruang/TMT", "{pangkatGolongan} / {tmtPangkat}"],
+  ["Jabatan/TMT", "{jabatan}/ {tmtJabatanLabel}"],
+  ["Unit Kerja", "{unitKerja}"],
+  ["Instansi", "{instansi}"],
+];
+
+// ============================================================
+// SECTION: PAK INTEGRASI (opsional, 3 halaman)
+// ============================================================
 function sectionIntegrasi() {
   const out = [];
   out.push(p(txt("{#adaIntegrasi}")));
 
-  // Halaman 1: Penghitungan & Akumulasi AK Penilaian Integrasi
-  out.push(...kopSurat("kopPemda", "kopOPD", "kopAlamat"));
+  // --- Halaman 1 ---
+  out.push(...kopSurat());
   out.push(...judulDok("PENGHITUNGAN DAN AKUMULASI ANGKA KREDIT PADA PENILAIAN INTEGRASI"));
-  out.push(dataPegawaiTable());
-  out.push(p(txt("")));
-  out.push(p(txt("PERHITUNGAN PENYESUAIAN ANGKA KREDIT INTEGRASI", { bold: true })));
+  out.push(pegawaiTableTanpaNomor([
+    ["Nama", "{nama}"], ["NIP", "{nip}"], ["Nomor Seri Karpeg", "{karpeg}"],
+    ["Pangkat/Golongan Ruang/TMT", "{pangkatGolongan} / {tmtPangkat}"],
+    ["Tempat/Tgl Lahir", "{ttl}"], ["Jenis Kelamin", "{jenisKelamin}"],
+    ["Pendidikan", "{pendidikan}"], ["Jabatan/TMT", "{jabatan}/ {tmtJabatanLabel}"],
+    ["Masa Kerja Golongan", "{masaKerjaGolongan}"], ["Unit Kerja", "{unitKerja}"],
+  ]));
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [3000, 3000, 3000],
     rows: [
+      headerRowFull("PERHITUNGAN PENYESUAIAN ANGKA KREDIT INTEGRASI", 3),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Jumlah Angka Kredit yang Diperoleh (Konvensional)", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Nilai Dasar", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Angka Kredit yang Dinilaikan pada Penilaian Integrasi", { bold: true }))] }),
+        cell(["JUMLAH ANGKA KREDIT YANG DIPEROLEH"], { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell(["NILAI DASAR"], { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell(["ANGKA KREDIT YANG DINILAIKAN PADA PENILAIAN INTEGRASI"], { align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiJumlahKonvensional}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiNilaiDasar}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiNilaiIntegrasi}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
+        cell("1", { align: AlignmentType.CENTER, shade: true }),
+        cell("2", { align: AlignmentType.CENTER, shade: true }),
+        cell("3", { align: AlignmentType.CENTER, shade: true }),
+      ]}),
+      new TableRow({ children: [
+        cell("{integrasiJumlahKonvensional}", { align: AlignmentType.CENTER, textOpts: { bold: true, size: 26 } }),
+        cell("{integrasiNilaiDasar}", { align: AlignmentType.CENTER, textOpts: { bold: true, size: 26 } }),
+        cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER, textOpts: { bold: true, size: 26 } }),
       ]}),
     ],
   }));
-  out.push(p(txt("")));
-  out.push(ttdBlok("integrasiTempatPenetapan", "integrasiTanggalPenetapan", "jabatanPenilai", "namaPenilai", "nipPenilai"));
-  out.push(p(txt("")));
-  out.push(...tembusan());
+  out.push(...signatureBlock("integrasiTempatPenetapan", "integrasiTanggalPenetapan", "{jabatanPenilai}", "namaPenilai", "nipPenilai"));
+  out.push(...tembusanBlok(true, "tembusan1", "tembusan2", "tembusan3"));
   out.push(pageBreakPara());
 
-  // Halaman 2: Penghitungan Kebutuhan Kekurangan Angka Kredit (rincian komponen konvensional)
-  out.push(...kopSurat("kopPemda", "kopOPD", "kopAlamat"));
+  // --- Halaman 2 ---
+  out.push(...kopSurat());
   out.push(...judulDok("PENGHITUNGAN KEBUTUHAN KEKURANGAN ANGKA KREDIT"));
-  out.push(dataPegawaiTable());
-  out.push(p(txt("")));
-  out.push(p(txt("PERHITUNGAN PENYESUAIAN ANGKA KREDIT DARI KONVENSIONAL KE INTEGRASI", { bold: true })));
+  out.push(instansiPeriodeDuaBaris("Instansi", "unitKerja", "Masa Penilaian", "integrasiMasaPenilaian"));
+  out.push(pegawaiTableBernomor([
+    ["Nama", "{nama}"], ["NIP", "{nip}"], ["Nomor Seri Karpeg", "{karpeg}"],
+    ["Pangkat/Golongan Ruang/TMT", "{pangkatGolongan} / {tmtPangkat}"],
+    ["Tempat/Tgl Lahir", "{ttl}"], ["Jenis Kelamin", "{jenisKelamin}"],
+    ["Pendidikan", "{pendidikan}"], ["Jabatan/TMT", "{jabatan}/ {tmtJabatanLabel}"],
+    ["Masa Kerja Golongan", "{masaKerjaGolongan}"], ["Unit Kerja", "{unitKerja}"],
+    ["Instansi", "{instansi}"],
+  ], true));
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [1700, 1900, 2000, 3400],
     rows: [
+      headerRowFull("PERHITUNGAN PENYESUAIAN ANGKA KREDIT DARI KONVENSIONAL KE INTEGRASI", 4),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Komponen Angka Kredit Konvensional", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Nilai", { bold: true }))] }),
+        cell("II", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("ANGKA KREDIT KONVENSIONAL", { colSpan: 1, align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("", {}),
+        cell("ANGKA KREDIT INTEGRASI", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("1. Pendidikan"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiPendidikanAK}"), { alignment: AlignmentType.CENTER })] }),
+        cell("", { shade: true }),
+        cell("1", { align: AlignmentType.CENTER, shade: true, colSpan: 1 }),
+        cell("", { shade: true }),
+        cell("2", { align: AlignmentType.CENTER, shade: true }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("2. Tugas Pokok"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiTugasPokokAK}"), { alignment: AlignmentType.CENTER })] }),
+        cell("1. Pendidikan", { width: 1700 }),
+        cell("{integrasiPendidikanAK}", { align: AlignmentType.CENTER }),
+        cell("Tugas Jabatan", { vMerge: VerticalMergeType.RESTART }),
+        cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER, vMerge: VerticalMergeType.RESTART }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("3. Pengembangan Profesi"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiPengembanganProfesiAK}"), { alignment: AlignmentType.CENTER })] }),
+        cell("2. Tugas Pokok", { width: 1700 }),
+        cell("{integrasiTugasPokokAK}", { align: AlignmentType.CENTER }),
+        cell("", { vMerge: VerticalMergeType.CONTINUE }),
+        cell("", { vMerge: VerticalMergeType.CONTINUE }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("4. Unsur Penunjang"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiPenunjangAK}"), { alignment: AlignmentType.CENTER })] }),
+        cell("3. Pengembangan Profesi", { width: 1700 }),
+        cell("{integrasiPengembanganProfesiAK}", { align: AlignmentType.CENTER }),
+        cell("Pengembangan Profesi", {}),
+        cell("", {}),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("JUMLAH", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiJumlahKonvensional}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
+        cell("4. Unsur Penunjang", { width: 1700 }),
+        cell("{integrasiPenunjangAK}", { align: AlignmentType.CENTER }),
+        cell("Unsur Penunjang", {}),
+        cell("", {}),
+      ]}),
+      new TableRow({ children: [
+        cell("JUMLAH", { textOpts: { bold: true } }),
+        cell("{integrasiJumlahKonvensional}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("JUMLAH", { textOpts: { bold: true } }),
+        cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
     ],
   }));
-  out.push(p(txt("")));
-  out.push(ttdBlok("integrasiTempatPenetapan", "integrasiTanggalPenetapan", "jabatanPenilai", "namaPenilai", "nipPenilai"));
-  out.push(p(txt("")));
-  out.push(...tembusan());
+  out.push(...signatureBlock("integrasiTempatPenetapan", "integrasiTanggalPenetapan", "{jabatanPenilai}", "namaPenilai", "nipPenilai"));
+  out.push(...tembusanBlok(true, "tembusan1", "tembusan2", "tembusan3"));
   out.push(pageBreakPara());
 
-  // Halaman 3: Penetapan Angka Kredit Integrasi
-  out.push(...kopSurat("kopPemda", "kopOPD", "kopAlamat"));
-  out.push(...judulDok("PENETAPAN ANGKA KREDIT INTEGRASI", "Nomor: {integrasiNomorSurat}"));
-  out.push(dataPegawaiTable());
-  out.push(p(txt("")));
+  // --- Halaman 3 ---
+  out.push(...kopSurat());
+  out.push(...judulDok("PENETAPAN ANGKA KREDIT INTEGRASI", "NOMOR:                            {integrasiNomorSurat}"));
+  out.push(instansiPeriodeDuaBaris("Instansi", "instansi", "Masa Penilaian", "integrasiMasaPenilaian"));
+  out.push(pegawaiTableBernomor(FIELDS_9, false));
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [500, 3900, 1150, 1150, 1150, 1150],
     rows: [
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Penetapan Angka Kredit", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("LAMA", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("BARU", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("JUMLAH", { bold: true }), { alignment: AlignmentType.CENTER })] }),
+        cell("II", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("PENETAPAN ANGKA KREDIT", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("LAMA", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("BARU", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("JUMLAH", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("PERALIHAN", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Angka Kredit yang diperoleh dari Kegiatan Tugas Jabatan"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("0,000"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiNilaiIntegrasi}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{integrasiNilaiIntegrasi}"), { alignment: AlignmentType.CENTER })] }),
+        cell("1", { align: AlignmentType.CENTER, shade: true }), cell("2", { align: AlignmentType.CENTER, shade: true }),
+        cell("3", { align: AlignmentType.CENTER, shade: true }), cell("4", { align: AlignmentType.CENTER, shade: true }),
+        cell("5", { align: AlignmentType.CENTER, shade: true }), cell("6", { align: AlignmentType.CENTER, shade: true }),
+      ]}),
+      new TableRow({ children: [cell("1", { align: AlignmentType.CENTER }), cell("Angka Kredit yang diberikan"), cell(""), cell(""), cell(""), cell("")] }),
+      new TableRow({ children: [cell("2", { align: AlignmentType.CENTER }), cell("Angka Kredit yang diperoleh dari Pengalaman"), cell(""), cell(""), cell(""), cell("")] }),
+      new TableRow({ children: [cell("3", { align: AlignmentType.CENTER }), cell("Angka Kredit yang diperoleh dari Kegiatan Tugas Jabatan"), cell("0,000", { align: AlignmentType.CENTER }), cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER }), cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER }), cell("")] }),
+      new TableRow({ children: [cell("4", { align: AlignmentType.CENTER }), cell("Angka Kredit yang diperoleh dari Pengembangan Profesi"), cell(""), cell(""), cell(""), cell("")] }),
+      new TableRow({ children: [cell("5", { align: AlignmentType.CENTER }), cell("Angka Kredit yang diperoleh dari Kegiatan Penunjang"), cell(""), cell(""), cell(""), cell("")] }),
+      new TableRow({ children: [
+        cell("TOTAL ANGKA KREDIT", { colSpan: 2, align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("0,000", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell(""),
       ]}),
     ],
   }));
-  out.push(p(txt("")));
-  out.push(ttdBlok("integrasiTempatPenetapan", "integrasiTanggalPenetapan", "jabatanPenilai", "namaPenilai", "nipPenilai"));
-  out.push(p(txt("")));
-  out.push(...tembusan());
+  out.push(p(txt(""), { spacing: { after: 120 } }));
+  out.push(new Table({
+    width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [3500, 1800, 1800, 1900],
+    rows: [
+      new TableRow({ children: [
+        cell("Keterangan", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("Pangkat", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("Jenjang Jabatan", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("Pengembangan Profesi", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+      ]}),
+      new TableRow({ children: [
+        cell("Angka Kredit minimal yang harus dicapai untuk kenaikan pangkat / jenjang"),
+        cell("{penetapanMinPangkat}", { align: AlignmentType.CENTER }),
+        cell("{penetapanMinJenjang}", { align: AlignmentType.CENTER }),
+        cell("", {}),
+      ]}),
+      new TableRow({ children: [
+        cell(["Kelebihan Angka Kredit yang harus dipenuhi untuk kenaikan pangkat", "Kekurangan Angka Kredit yang harus dipenuhi untuk kenaikan Jenjang Jabatan"]),
+        cell("{penetapanKelebihanPangkat}", { align: AlignmentType.CENTER }),
+        cell("{penetapanKelebihanJenjang}", { align: AlignmentType.CENTER }),
+        cell("0", { align: AlignmentType.CENTER }),
+      ]}),
+      new TableRow({ children: [
+        cell("III", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell(["{penetapanKesimpulanPangkat}"], { colSpan: 3, textOpts: { bold: true } }),
+      ]}),
+    ],
+  }));
+  out.push(...signatureBlock("integrasiTempatPenetapan", "integrasiTanggalPenetapan", "{jabatanPenilai}", "namaPenilai", "nipPenilai"));
+  out.push(...tembusanBlok(true, "tembusan1", "tembusan2", "tembusan3"));
 
   out.push(p(txt("{/adaIntegrasi}")));
   return out;
 }
 
 function sectionAntarIntegrasiPeriode() {
-  // Sisipkan page break HANYA jika section integrasi benar-benar dirender,
-  // supaya tidak muncul halaman kosong ketika PAK Integrasi dinonaktifkan.
   return [p(txt("{#adaIntegrasi}")), pageBreakPara(), p(txt("{/adaIntegrasi}"))];
 }
 
-// ---------- SECTION: KONVERSI (loop per periode, fleksibel) ----------
+// ============================================================
+// SECTION: KONVERSI PREDIKAT KINERJA (loop per periode, fleksibel)
+// ============================================================
 function sectionKonversi() {
   const out = [];
   out.push(p(txt("{#periodeList}")));
-  out.push(...kopSurat("kopPemda", "kopOPD", "kopAlamat"));
-  out.push(...judulDok("KONVERSI PREDIKAT KINERJA KE ANGKA KREDIT", "Nomor: {nomorSurat}"));
+  out.push(...kopSurat());
+  out.push(...judulDok("KONVERSI PREDIKAT KINERJA KE ANGKA KREDIT", "NOMOR:                            {nomorSurat}"));
+  out.push(instansiPeriodeDuaBaris("Instansi", "instansi", "Periode", "periodeLabel"));
+  out.push(pegawaiTableBernomor(FIELDS_9, false));
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [2200, 2200, 2200, 2400],
     rows: [
+      headerRowFull("KONVERSI PREDIKAT KINERJA KE ANGKA KREDIT", 4),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Instansi", { bold: true })), p(txt("{instansi}"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Periode", { bold: true })), p(txt("{tglMulaiLabel} - {tglSelesaiLabel}"))] }),
+        cell("Hasil Penilaian Kinerja", { colSpan: 2, align: AlignmentType.CENTER }),
+        cell("Koefisien per Tahun", { vMerge: VerticalMergeType.RESTART, align: AlignmentType.CENTER }),
+        cell("Angka Kredit yang didapat (kolom 2 x kolom 3)", { vMerge: VerticalMergeType.RESTART, align: AlignmentType.CENTER }),
+      ]}),
+      new TableRow({ children: [
+        cell("PREDIKAT", { align: AlignmentType.CENTER }),
+        cell("PROSENTASE", { align: AlignmentType.CENTER }),
+        cell("", { vMerge: VerticalMergeType.CONTINUE }),
+        cell("", { vMerge: VerticalMergeType.CONTINUE }),
+      ]}),
+      new TableRow({ children: [
+        cell("1", { align: AlignmentType.CENTER, shade: true }), cell("2", { align: AlignmentType.CENTER, shade: true }),
+        cell("3", { align: AlignmentType.CENTER, shade: true }), cell("4", { align: AlignmentType.CENTER, shade: true }),
+      ]}),
+      new TableRow({ children: [
+        cell("{predikatLabel}", { align: AlignmentType.CENTER, textOpts: { size: 26 } }),
+        cell("{pecahanBulan}", { align: AlignmentType.CENTER, textOpts: { size: 26 } }),
+        cell("{koefisienTahun}", { align: AlignmentType.CENTER, textOpts: { size: 26 } }),
+        cell("{angkaKredit}", { align: AlignmentType.CENTER, textOpts: { size: 26, bold: true } }),
       ]}),
     ],
   }));
-  out.push(p(txt("")));
-  out.push(p(txt("PEJABAT FUNGSIONAL YANG DINILAI", { bold: true })));
-  out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    columnWidths: [500, 5000, 500, 4300],
-    rows: [
-      ["Nama", "{nama}"], ["NIP", "{nip}"], ["Nomor Seri Karpeg", "{karpeg}"],
-      ["Tempat/Tgl Lahir", "{ttl}"], ["Jenis Kelamin", "{jenisKelamin}"],
-      ["Pangkat/Golongan Ruang/TMT", "{pangkatGolongan} / {tmtPangkat}"],
-      ["Jabatan/TMT", "{jabatan} / {jabatanTmtLabel}"],
-      ["Unit Kerja", "{unitKerja}"], ["Instansi", "{instansi}"],
-    ].map((r, i) => new TableRow({ children: [
-      new TableCell({ width: { size: 500, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(String(i + 1)))] }),
-      new TableCell({ width: { size: 5000, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(r[0]))] }),
-      new TableCell({ width: { size: 500, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(":"))] }),
-      new TableCell({ width: { size: 4300, type: WidthType.DXA }, borders: cellBorders(), children: [p(txt(r[1]))] }),
-    ] })),
-  }));
-  out.push(p(txt("")));
-  out.push(p(txt("KONVERSI PREDIKAT KINERJA KE ANGKA KREDIT", { bold: true })));
-  out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [
-      new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Hasil Penilaian Kinerja", { bold: true })), p(txt("PREDIKAT", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("")), p(txt("PROSENTASE", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Koefisien per Tahun", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Angka Kredit yang didapat", { bold: true })), p(txt("(kolom 2 x kolom 3)"))] }),
-      ]}),
-      new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("{predikatLabel}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{pecahanBulan}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{koefisienTahun}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{angkaKredit}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-      ]}),
-    ],
-  }));
-  out.push(p(txt("")));
-  out.push(ttdBlok("tempatPenetapan", "tanggalPenetapan", "jabatanPenilai", "namaPenilai", "nipPenilai"));
-  out.push(p(txt("")));
-  out.push(p(txt("Tembusan disampaikan kepada:")));
-  out.push(p(txt("1. {tembusan1}")));
-  out.push(p(txt("2. {tembusan2}")));
-  out.push(p(txt("3. {tembusan3}")));
+  out.push(...signatureBlock("tempatPenetapan", "tanggalPenetapan", "{jabatanPenilai}", "namaPenilai", "nipPenilai"));
+  out.push(...tembusanBlok(true, "tembusan1", "tembusan2", "tembusan3"));
   out.push(pageBreakPara());
   out.push(p(txt("{/periodeList}")));
   return out;
 }
 
-// ---------- SECTION: AKUMULASI ANGKA KREDIT ----------
+// ============================================================
+// SECTION: AKUMULASI ANGKA KREDIT
+// ============================================================
 function sectionAkumulasi() {
   const out = [];
-  out.push(...kopSurat("kopPemda", "kopOPD", "kopAlamat"));
-  out.push(...judulDok("AKUMULASI ANGKA KREDIT", "Nomor: {nomorSuratAkumulasi}"));
-  out.push(dataPegawaiTable());
-  out.push(p(txt("")));
-  out.push(p(txt("HASIL PENILAIAN ANGKA KREDIT", { bold: true })));
+  out.push(...kopSurat());
+  out.push(...judulDok("AKUMULASI ANGKA KREDIT", "NOMOR:                            {nomorSuratAkumulasi}"));
+  out.push(instansiPeriodeInline("instansi", "periodeTotalLabel"));
+  out.push(pegawaiTableBernomor(FIELDS_9, true));
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9800, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [1200, 2000, 1600, 1600, 1600, 1800],
     rows: [
+      headerRowFull("HASIL PENILAIAN ANGKA KREDIT", 6),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Uraian", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Periode / Predikat", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Angka Kredit", { bold: true }))] }),
+        cell("HASIL PENILAIAN KINERJA", { colSpan: 4, align: AlignmentType.CENTER }),
+        cell("KOEFISIEN PER TAHUN", { vMerge: VerticalMergeType.RESTART, align: AlignmentType.CENTER }),
+        cell("ANGKA KREDIT YANG DIDAPAT", { vMerge: VerticalMergeType.RESTART, align: AlignmentType.CENTER }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("{#akumulasiBaris}{uraian}"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{keterangan}"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{nilai}{/akumulasiBaris}"), { alignment: AlignmentType.CENTER })] }),
+        cell("TAHUN", { align: AlignmentType.CENTER }),
+        cell("PERIODIK (BULAN)", { align: AlignmentType.CENTER }),
+        cell("PREDIKAT", { align: AlignmentType.CENTER }),
+        cell("PROSENTASE", { align: AlignmentType.CENTER }),
+        cell("", { vMerge: VerticalMergeType.CONTINUE }),
+        cell("", { vMerge: VerticalMergeType.CONTINUE }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("JUMLAH ANGKA KREDIT YANG DIPEROLEH", { bold: true }))], columnSpan: 2 }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{akumulasiTotal}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
+        cell("1", { align: AlignmentType.CENTER, shade: true }), cell("2", { align: AlignmentType.CENTER, shade: true }),
+        cell("3", { align: AlignmentType.CENTER, shade: true }), cell("4", { align: AlignmentType.CENTER, shade: true }),
+        cell("5", { align: AlignmentType.CENTER, shade: true }), cell("6", { align: AlignmentType.CENTER, shade: true }),
+      ]}),
+      // baris nilai integrasi (opsional)
+      new TableRow({ children: [
+        cell("{#adaIntegrasi}{integrasiTahunLabel}{/adaIntegrasi}", { align: AlignmentType.CENTER }),
+        cell("{#adaIntegrasi}Nilai Integrasi{/adaIntegrasi}", { align: AlignmentType.CENTER }),
+        cell(""), cell(""), cell(""),
+        cell("{#adaIntegrasi}{integrasiNilaiIntegrasi}{/adaIntegrasi}", { align: AlignmentType.CENTER }),
+      ]}),
+      // baris per-periode (loop di dalam tabel yang sama)
+      new TableRow({ children: [
+        cell("{#periodeList}{tahunLabel}", { align: AlignmentType.CENTER }),
+        cell("{periodikLabel}", { align: AlignmentType.CENTER }),
+        cell("{predikatLabel}", { align: AlignmentType.CENTER }),
+        cell("{pecahanBulan}", { align: AlignmentType.CENTER }),
+        cell("{koefisienTahun}", { align: AlignmentType.CENTER }),
+        cell("{angkaKredit}{/periodeList}", { align: AlignmentType.CENTER }),
+      ]}),
+      new TableRow({ children: [
+        cell("JUMLAH ANGKA KREDIT YANG DIPEROLEH", { colSpan: 5, align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("{akumulasiTotal}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
     ],
   }));
-  out.push(p(txt("")));
-  out.push(ttdBlok("tempatPenetapanAkhir", "tanggalPenetapanAkhir", "jabatanPenilai", "namaPenilai", "nipPenilai"));
-  out.push(p(txt("")));
-  out.push(...tembusan());
+  out.push(...signatureBlock("tempatPenetapanAkhir", "tanggalPenetapanAkhir", "{jabatanPenilai}", "namaPenilai", "nipPenilai"));
+  out.push(...tembusanBlok(false, "tembusanFinal1", "tembusanFinal2", "tembusanFinal3"));
   return out;
 }
 
-// ---------- SECTION: PENETAPAN ANGKA KREDIT (final) ----------
+// ============================================================
+// SECTION: PENETAPAN ANGKA KREDIT (final)
+// ============================================================
 function sectionPenetapan() {
   const out = [];
   out.push(pageBreakPara());
-  out.push(...kopSurat("kopPemda", "kopOPD", "kopAlamat"));
-  out.push(...judulDok("PENETAPAN ANGKA KREDIT", "Nomor: {nomorSuratPenetapan}"));
-  out.push(dataPegawaiTable());
-  out.push(p(txt("")));
-  out.push(p(txt("HASIL PENILAIAN ANGKA KREDIT", { bold: true })));
+  out.push(...kopSurat());
+  out.push(...judulDok("PENETAPAN ANGKA KREDIT", "NOMOR:                            {nomorSuratPenetapan}"));
+  out.push(instansiPeriodeInline("instansi", "periodeTotalLabel"));
+  out.push(pegawaiTableBernomor(FIELDS_9, true));
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9800, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [500, 3700, 1150, 1150, 1150, 2150],
     rows: [
+      headerRowFull("HASIL PENILAIAN ANGKA KREDIT", 6),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Penetapan Angka Kredit", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("LAMA", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("BARU", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("JUMLAH", { bold: true }), { alignment: AlignmentType.CENTER })] }),
+        cell("II", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("PENETAPAN ANGKA KREDIT", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("LAMA", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("BARU", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("JUMLAH", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("KETERANGAN", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("AK Dasar yang diberikan"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkDasarDiberikan}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt(""))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkDasarDiberikan}"), { alignment: AlignmentType.CENTER })] }),
+        cell("1", { align: AlignmentType.CENTER, shade: true }), cell("2", { align: AlignmentType.CENTER, shade: true }),
+        cell("3", { align: AlignmentType.CENTER, shade: true }), cell("4", { align: AlignmentType.CENTER, shade: true }),
+        cell("5", { align: AlignmentType.CENTER, shade: true }), cell("6", { align: AlignmentType.CENTER, shade: true }),
       ]}),
+      new TableRow({ children: [cell("1", { align: AlignmentType.CENTER }), cell("AK Dasar yang diberikan"), cell("{penetapanAkDasarDiberikan}", { align: AlignmentType.CENTER }), cell(""), cell("{penetapanAkDasarDiberikan}", { align: AlignmentType.CENTER }), cell("")] }),
+      new TableRow({ children: [cell("2", { align: AlignmentType.CENTER }), cell("AK JF lama"), cell("{penetapanAkJFLama}", { align: AlignmentType.CENTER }), cell(""), cell("{penetapanAkJFLama}", { align: AlignmentType.CENTER }), cell("")] }),
+      new TableRow({ children: [cell("3", { align: AlignmentType.CENTER }), cell("AK Penyesuaian/Penyetaraan"), cell(""), cell(""), cell(""), cell("")] }),
+      new TableRow({ children: [cell("4", { align: AlignmentType.CENTER }), cell("AK Konversi"), cell(""), cell("{penetapanAkKonversiBaru}", { align: AlignmentType.CENTER }), cell("{penetapanAkKonversiBaru}", { align: AlignmentType.CENTER }), cell("")] }),
+      new TableRow({ children: [cell("5", { align: AlignmentType.CENTER }), cell("AK yang diperoleh dari peningkatan pendidikan"), cell(""), cell(""), cell(""), cell("")] }),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("AK JF Lama / AK Integrasi Awal"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkJFLama}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt(""))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkJFLama}"), { alignment: AlignmentType.CENTER })] }),
-      ]}),
-      new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("AK Konversi Predikat Kinerja"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt(""))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkKonversiBaru}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkKonversiBaru}"), { alignment: AlignmentType.CENTER })] }),
-      ]}),
-      new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("JUMLAH ANGKA KREDIT KUMULATIF", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkJFLama}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanAkKonversiBaru}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanJumlahKumulatif}", { bold: true }), { alignment: AlignmentType.CENTER })] }),
+        cell("JUMLAH ANGKA KREDIT KUMULATIF", { colSpan: 2, align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("{penetapanAkJFLama}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("{penetapanAkKonversiBaru}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("{penetapanJumlahKumulatif}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell(""),
       ]}),
     ],
   }));
-  out.push(p(txt("")));
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
+    columnWidths: [5000, 2000, 2000],
     rows: [
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Keterangan", { bold: true }))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Pangkat", { bold: true }), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("Jenjang Jabatan", { bold: true }), { alignment: AlignmentType.CENTER })] }),
+        cell("Keterangan", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("Pangkat", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("Jenjang Jabatan", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Angka Kredit Minimal yang harus dipenuhi untuk kenaikan pangkat/jenjang"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanMinPangkat}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanMinJenjang}"), { alignment: AlignmentType.CENTER })] }),
+        cell("Angka Kredit Minimal yang harus dipenuhi untuk kenaikan pangkat/jenjang"),
+        cell("{penetapanMinPangkat}", { align: AlignmentType.CENTER }),
+        cell("{penetapanMinJenjang}", { align: AlignmentType.CENTER }),
       ]}),
       new TableRow({ children: [
-        new TableCell({ borders: cellBorders(), children: [p(txt("Kelebihan/Kekurangan Angka Kredit"))] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanKelebihanPangkat}"), { alignment: AlignmentType.CENTER })] }),
-        new TableCell({ borders: cellBorders(), children: [p(txt("{penetapanKelebihanJenjang}"), { alignment: AlignmentType.CENTER })] }),
+        cell(["Kelebihan Angka Kredit yang harus dipenuhi untuk kenaikan pangkat", "Kekurangan Angka Kredit yang harus dipenuhi untuk kenaikan Jenjang Jabatan"]),
+        cell("{penetapanKelebihanPangkat}", { align: AlignmentType.CENTER }),
+        cell("{penetapanKelebihanJenjang}", { align: AlignmentType.CENTER }),
       ]}),
+      new TableRow({ children: [cell(["{penetapanKesimpulanPangkat}", "{penetapanKesimpulanJenjang}"], { colSpan: 3, textOpts: { bold: true } })] }),
     ],
   }));
-  out.push(p(txt("")));
-  out.push(p(txt("{penetapanKesimpulan}", { bold: true }), { alignment: AlignmentType.CENTER }));
-  out.push(p(txt("")));
-  out.push(ttdBlok("tempatPenetapanAkhir", "tanggalPenetapanAkhir", "jabatanPenilai", "namaPenilai", "nipPenilai"));
-  out.push(p(txt("")));
-  out.push(...tembusan());
+  out.push(...signatureBlock("tempatPenetapanAkhir", "tanggalPenetapanAkhir", "{jabatanPenilai}", "namaPenilai", "nipPenilai"));
+  out.push(...tembusanBlok(false, "tembusanFinal1", "tembusanFinal2", "tembusanFinal3"));
   return out;
 }
 
@@ -449,12 +660,12 @@ function build() {
     sections: [
       {
         properties: {
-          page: { size: { width: 11907, height: 16839 }, margin: { top: 1000, bottom: 1000, left: 1200, right: 1200 } }, // A4
+          page: { size: { width: 11907, height: 16839 }, margin: { top: 700, bottom: 700, left: 1100, right: 1100 } },
         },
         children,
       },
     ],
-    styles: { default: { document: { run: { font: FONT, size: SZ } } } },
+    styles: { default: { document: { run: { font: FONT, size: 22 } } } },
   });
 
   return Packer.toBuffer(doc).then((buf) => {
