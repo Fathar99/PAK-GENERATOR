@@ -1,0 +1,17 @@
+{
+  "name": "pak-generator",
+  "version": "1.0.0",
+  "description": "Generator dokumen PAK (Penetapan Angka Kredit) — PAK Integrasi & Konversi Predikat Kinerja. Aplikasi web statis (GitHub Pages), file ini hanya untuk keperluan build/uji template Word oleh developer.",
+  "private": true,
+  "scripts": {
+    "build-template": "node scripts/build-template.js",
+    "test": "node scripts/test-fill.js && node scripts/test-tanpa-integrasi.js && node scripts/integration-test.js"
+  },
+  "devDependencies": {
+    "docx": "^9.7.1",
+    "docxtemplater": "^3.69.3",
+    "jsdom": "^30.0.1",
+    "pizzip": "^3.1.6",
+    "bwip-js": "^4.11.2"
+  }
+}
