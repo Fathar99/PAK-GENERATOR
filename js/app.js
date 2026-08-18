@@ -8,7 +8,7 @@
 (function () {
   // Naikkan angka ini setiap kali templates/template.docx diperbarui, supaya
   // browser pengguna tidak memakai versi lama yang tersimpan di cache.
-  const TEMPLATE_VERSION = "3";
+  const TEMPLATE_VERSION = "4";
 
   const BULAN_ID = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -325,15 +325,41 @@
   });
 
   // ---------- Barcode (JsBarcode) ----------
-  function buatBarcodePngBuffer(teks) {
+  // Catatan: kita TIDAK memakai docxtemplater-image-module-free karena
+  // library tersebut punya bug lama yang belum diperbaiki di browser modern
+  // ("Cannot set property namespaceURI ..."). Sebagai gantinya, template
+  // sudah berisi gambar barcode PLACEHOLDER (dibuat saat build template).
+  // Setelah docxtemplater selesai mengisi teks, kita "tukar" byte gambar
+  // placeholder itu langsung di dalam file .docx (zip) dengan barcode asli
+  // — pendekatan yang jauh lebih stabil lintas-browser.
+  function buatBarcodePngBytes(teks) {
     const canvas = document.createElement("canvas");
-    JsBarcode(canvas, teks, { format: "CODE128", displayValue: false, margin: 4, height: 32, width: 1.6 });
+    JsBarcode(canvas, teks, { format: "CODE128", displayValue: false, margin: 4, height: 60, width: 2 });
     const dataUrl = canvas.toDataURL("image/png");
     const base64 = dataUrl.split(",")[1];
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return { bytes: bytes.buffer, width: canvas.width, height: canvas.height };
+    return bytes;
+  }
+
+  // Ganti semua gambar kecil (placeholder barcode) di dalam zip docx dengan
+  // barcode asli. Logo instansi berukuran besar (ratusan KB) sehingga aman
+  // dibedakan dengan ambang batas ukuran file.
+  function tukarPlaceholderBarcode(zip, barcodeBytes) {
+    const LOGO_MIN_SIZE = 50000; // byte; logo asli jauh lebih besar dari ini
+    let jumlahDitukar = 0;
+    Object.keys(zip.files).forEach((filename) => {
+      if (!filename.startsWith("word/media/")) return;
+      const file = zip.files[filename];
+      if (file.dir) return;
+      const content = file.asUint8Array();
+      if (content.length > 0 && content.length < LOGO_MIN_SIZE) {
+        zip.file(filename, barcodeBytes);
+        jumlahDitukar += 1;
+      }
+    });
+    return jumlahDitukar;
   }
 
   // ---------- Generate dokumen Word ----------
@@ -467,25 +493,22 @@
         tembusanFinal1: el.tembusanFinal1.value,
         tembusanFinal2: el.tembusanFinal2.value,
         tembusanFinal3: el.tembusanFinal3.value,
-
-        barcode: barcodeTeks,
       };
 
-      const barcodeImg = buatBarcodePngBuffer(barcodeTeks);
-      const imageOpts = {
-        centered: false,
-        getImage: () => barcodeImg.bytes,
-        getSize: () => [110, 32],
-      };
-      const imageModule = new window.ImageModule(imageOpts);
+      const barcodeBytes = buatBarcodePngBytes(barcodeTeks);
 
       const resp = await fetch("templates/template.docx?v=" + TEMPLATE_VERSION, { cache: "no-store" });
       if (!resp.ok) throw new Error("Gagal memuat template.docx");
       const arrayBuffer = await resp.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
-      const doc = new window.docxtemplater(zip, { paragraphLoop: true, linebreaks: true, modules: [imageModule] });
+      const doc = new window.docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
       doc.render(data);
-      const outBlob = doc.getZip().generate({
+
+      const outZip = doc.getZip();
+      const jumlahBarcode = tukarPlaceholderBarcode(outZip, barcodeBytes);
+      if (jumlahBarcode === 0) console.warn("Tidak ada placeholder barcode ditemukan untuk ditukar.");
+
+      const outBlob = outZip.generate({
         type: "blob",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       });
