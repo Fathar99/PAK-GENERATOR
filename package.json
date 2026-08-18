@@ -8,9 +8,13 @@
     "test": "node scripts/test-fill.js && node scripts/test-tanpa-integrasi.js && node scripts/integration-test.js"
   },
   "devDependencies": {
-    "docx": "^9.0.2",
+    "docx": "^9.7.1",
     "docxtemplater": "^3.69.3",
-    "pizzip": "^3.1.6",
-    "jsdom": "^30.0.1"
+    "jsdom": "^30.0.1",
+    "pizzip": "^3.1.6"
+  },
+  "dependencies": {
+    "bwip-js": "^4.11.2",
+    "docxtemplater-image-module-free": "^1.1.1"
   }
 }

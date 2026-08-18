@@ -11,6 +11,12 @@ bisa langsung di-deploy sebagai situs statis di **GitHub Pages**.
 
 - Form input data pegawai (nama, NIP, karpeg, TTL, unit kerja, pangkat/golongan,
   jabatan, jenjang jabatan fungsional, dll).
+- **Template Word replika presisi** dari format resmi Pemerintah Kabupaten
+  Buton — kop surat dengan logo asli, font Cambria, struktur tabel bernomor
+  romawi (I/II/III), sama seperti dokumen contoh yang dijadikan acuan.
+- **Barcode keaslian dokumen** — setiap halaman kop surat memuat barcode
+  (Code128) berisi NIP + Nama pegawai, untuk membantu verifikasi bahwa
+  dokumen tidak diubah/dipalsukan.
 - **PAK Integrasi bersifat opsional** — bisa dinonaktifkan untuk pegawai yang
   langsung menggunakan sistem angka kredit integrasi (tanpa riwayat AK
   konvensional).
@@ -24,9 +30,11 @@ bisa langsung di-deploy sebagai situs statis di **GitHub Pages**.
   pangkat/jenjang).
 - Ringkasan perhitungan langsung (live preview) sebelum dokumen dibuat.
 - Output dokumen Word (`.docx`) berisi: Penghitungan & Akumulasi AK Integrasi
-  (jika diaktifkan), Konversi Predikat Kinerja per periode, Akumulasi Angka
-  Kredit, dan Penetapan Angka Kredit final — lengkap dengan kesimpulan
-  otomatis "dapat/belum dapat dipertimbangkan untuk kenaikan pangkat/jenjang".
+  (jika diaktifkan), Penghitungan Kebutuhan Kekurangan AK, Penetapan AK
+  Integrasi, Konversi Predikat Kinerja per periode, Akumulasi Angka Kredit,
+  dan Penetapan Angka Kredit final — lengkap dengan kesimpulan otomatis
+  "dapat/belum dapat dipertimbangkan untuk kenaikan pangkat" dan "...kenaikan
+  jenjang jabatan" (masing-masing bisa diberi nama pangkat/jenjang tujuan).
 
 ## Struktur Proyek
 
@@ -34,16 +42,19 @@ bisa langsung di-deploy sebagai situs statis di **GitHub Pages**.
 pak-generator/
 ├── index.html              # Halaman utama (form + preview)
 ├── css/style.css            # Gaya tampilan
+├── assets/
+│   └── logo-buton.png       # Logo resmi Kabupaten Buton (dipakai di kop surat)
 ├── js/
 │   ├── regulasi.js          # Tabel koefisien AK, persentase predikat, AK minimal (BISA DIUBAH)
 │   ├── calc.js               # Logika perhitungan (murni, teruji)
-│   └── app.js                 # Logika form, live preview, generate dokumen
+│   └── app.js                 # Logika form, live preview, barcode, generate dokumen
 ├── templates/
 │   └── template.docx        # Template Word master berisi tag docxtemplater
 └── scripts/                  # Script Node.js untuk build & uji template (tidak dipakai saat runtime)
     ├── build-template.js     # Membangun ulang templates/template.docx
-    ├── test-fill.js           # Uji perhitungan skenario dengan PAK Integrasi
-    └── test-tanpa-integrasi.js # Uji perhitungan skenario tanpa PAK Integrasi
+    ├── test-fill.js           # Uji perhitungan & barcode skenario dengan PAK Integrasi
+    ├── test-tanpa-integrasi.js # Uji perhitungan skenario tanpa PAK Integrasi (periode bulanan)
+    └── integration-test.js    # Uji alur aplikasi web end-to-end (form → docx)
 ```
 
 ## Cara Deploy ke GitHub Pages
@@ -65,8 +76,8 @@ pak-generator/
 
 ## Cara Pakai
 
-1. Isi **Kop Surat / Instansi** (nama pemda, OPD, alamat — bisa disesuaikan
-   per pengguna/instansi).
+1. Isi **Kop Surat / Instansi** — nama OPD/dinas dan alamatnya (nama Pemerintah
+   Kabupaten Buton sudah tetap mengikuti format resmi asli).
 2. Isi **Data Pejabat Fungsional** — pilih **Jenjang Jabatan Fungsional**
    dengan benar karena ini menentukan koefisien angka kredit tahunan.
 3. Jika pegawai memiliki riwayat AK konvensional (sebelum sistem integrasi),
@@ -77,10 +88,14 @@ pak-generator/
    "+ Tambah Periode Penilaian". Setiap periode bebas panjangnya (1 bulan,
    2 bulan, 6 bulan, dst) — cukup pilih tanggal mulai & selesai serta
    predikat SKP periode tersebut.
-5. Lengkapi data **Pejabat Penilai** dan **Tembusan**.
+5. Lengkapi data **Pejabat Penilai** dan **Tembusan** (tembusan berbeda untuk
+   dokumen Konversi/Integrasi vs. dokumen Akumulasi/Penetapan, sesuai format
+   asli). Isi juga **Nama Pangkat/Jenjang Berikutnya** jika ingin kesimpulan
+   otomatis menyebutkan nama pangkat/jenjang tujuan (mis. "PENATA (III/c)").
 6. Periksa **Ringkasan Perhitungan** di panel kanan.
 7. Klik **"Buat & Unduh Dokumen PAK (.docx)"** — dokumen Word akan otomatis
-   terunduh, sudah terisi seluruh data dan siap dicetak/ditandatangani.
+   terunduh, sudah terisi seluruh data, dilengkapi barcode keaslian di setiap
+   halaman, dan siap dicetak/ditandatangani.
 
 ## Mengubah Aturan Perhitungan (jika ada perubahan regulasi)
 
