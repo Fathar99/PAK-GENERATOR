@@ -8,7 +8,7 @@
 (function () {
   // Naikkan angka ini setiap kali templates/template.docx diperbarui, supaya
   // browser pengguna tidak memakai versi lama yang tersimpan di cache.
-  const TEMPLATE_VERSION = "4";
+  const TEMPLATE_VERSION = "5";
 
   const BULAN_ID = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
