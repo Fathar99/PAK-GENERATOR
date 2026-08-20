@@ -1,6 +1,7 @@
 /**
  * app.js — logika UI: form dinamis, perhitungan langsung (live), pembuatan
- * barcode (JsBarcode, berisi NIP + Nama untuk verifikasi keaslian), dan
+ * barcode (QR Code via api.qrserver.com, berisi NIP + Nama + Pangkat/Golongan
+ * untuk verifikasi keaslian), dan
  * pembuatan dokumen .docx di sisi browser (docxtemplater + pizzip +
  * docxtemplater-image-module-free), sehingga aplikasi ini 100% statis dan
  * bisa di-deploy di GitHub Pages tanpa server/backend.
@@ -8,7 +9,7 @@
 (function () {
   // Naikkan angka ini setiap kali templates/template.docx diperbarui, supaya
   // browser pengguna tidak memakai versi lama yang tersimpan di cache.
-  const TEMPLATE_VERSION = "5";
+  const TEMPLATE_VERSION = "6";
 
   const BULAN_ID = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -324,29 +325,26 @@
     recalc();
   });
 
-  // ---------- Barcode (JsBarcode) ----------
+  // ---------- QR Code (api.qrserver.com) ----------
   // Catatan: kita TIDAK memakai docxtemplater-image-module-free karena
   // library tersebut punya bug lama yang belum diperbaiki di browser modern
   // ("Cannot set property namespaceURI ..."). Sebagai gantinya, template
-  // sudah berisi gambar barcode PLACEHOLDER (dibuat saat build template).
+  // sudah berisi gambar QR PLACEHOLDER (dibuat saat build template).
   // Setelah docxtemplater selesai mengisi teks, kita "tukar" byte gambar
-  // placeholder itu langsung di dalam file .docx (zip) dengan barcode asli
+  // placeholder itu langsung di dalam file .docx (zip) dengan QR asli
   // — pendekatan yang jauh lebih stabil lintas-browser.
-  function buatBarcodePngBytes(teks) {
-    const canvas = document.createElement("canvas");
-    JsBarcode(canvas, teks, { format: "CODE128", displayValue: false, margin: 4, height: 60, width: 2 });
-    const dataUrl = canvas.toDataURL("image/png");
-    const base64 = dataUrl.split(",")[1];
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
+  async function buatQrPngBytes(teks) {
+    const url = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&data=" + encodeURIComponent(teks);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("Gagal membuat QR Code dari layanan online (api.qrserver.com).");
+    const arrayBuffer = await resp.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
   }
 
-  // Ganti semua gambar kecil (placeholder barcode) di dalam zip docx dengan
-  // barcode asli. Logo instansi berukuran besar (ratusan KB) sehingga aman
+  // Ganti semua gambar kecil (placeholder QR) di dalam zip docx dengan QR
+  // asli. Logo instansi berukuran besar (ratusan KB) sehingga aman
   // dibedakan dengan ambang batas ukuran file.
-  function tukarPlaceholderBarcode(zip, barcodeBytes) {
+  function tukarPlaceholderQr(zip, qrBytes) {
     const LOGO_MIN_SIZE = 50000; // byte; logo asli jauh lebih besar dari ini
     let jumlahDitukar = 0;
     Object.keys(zip.files).forEach((filename) => {
@@ -355,7 +353,7 @@
       if (file.dir) return;
       const content = file.asUint8Array();
       if (content.length > 0 && content.length < LOGO_MIN_SIZE) {
-        zip.file(filename, barcodeBytes);
+        zip.file(filename, qrBytes);
         jumlahDitukar += 1;
       }
     });
@@ -430,7 +428,7 @@
         (Number(el.integrasiPenunjangAK.value) || 0)
       ) : 0;
 
-      const barcodeTeks = `${el.nip.value}|${el.nama.value}`;
+      const qrTeks = `NIP: ${el.nip.value}\nNama: ${el.nama.value}\nPangkat/Golongan: ${el.pangkatGolongan.value}`;
 
       const data = {
         kopOPD: el.kopOPD.value,
@@ -495,7 +493,7 @@
         tembusanFinal3: el.tembusanFinal3.value,
       };
 
-      const barcodeBytes = buatBarcodePngBytes(barcodeTeks);
+      const qrBytes = await buatQrPngBytes(qrTeks);
 
       const resp = await fetch("templates/template.docx?v=" + TEMPLATE_VERSION, { cache: "no-store" });
       if (!resp.ok) throw new Error("Gagal memuat template.docx");
@@ -505,8 +503,8 @@
       doc.render(data);
 
       const outZip = doc.getZip();
-      const jumlahBarcode = tukarPlaceholderBarcode(outZip, barcodeBytes);
-      if (jumlahBarcode === 0) console.warn("Tidak ada placeholder barcode ditemukan untuk ditukar.");
+      const jumlahQr = tukarPlaceholderQr(outZip, qrBytes);
+      if (jumlahQr === 0) console.warn("Tidak ada placeholder QR Code ditemukan untuk ditukar.");
 
       const outBlob = outZip.generate({
         type: "blob",
