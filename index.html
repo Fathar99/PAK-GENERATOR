@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Generator PAK — Penetapan Angka Kredit</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">PAK</span>
+      <div class="brand-text">
+        <strong>Generator Penetapan Angka Kredit</strong>
+        <small>Konversi predikat kinerja &amp; integrasi angka kredit — sesuai Permenpan RB No. 1/2023</small>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" id="btn-load-sample" class="btn btn-ghost">Muat contoh</button>
+      <button type="button" id="btn-reset" class="btn btn-ghost">Reset</button>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+  <form id="pak-form" class="form-col">
+
+    <section class="card">
+      <h2>1. Kop Surat / Instansi</h2>
+      <p class="hint">Kop surat mengikuti format resmi Pemerintah Kabupaten Buton. Isi nama OPD/dinas dan alamatnya sesuai unit kerja Anda.</p>
+      <label>Nama OPD / Dinas
+        <input type="text" name="kopOPD" placeholder="DINAS KESEHATAN" required />
+      </label>
+      <label>Alamat Instansi
+        <input type="text" name="kopAlamat" placeholder="Kecamatan Pasarwajo, Kabupaten Buton, Provinsi Sulawesi Tenggara" required />
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>2. Data Pejabat Fungsional yang Dinilai</h2>
+      <div class="grid-2">
+        <label>Nama Lengkap &amp; Gelar
+          <input type="text" name="nama" placeholder="NURFADILLA, S.Tr.Keb" required />
+        </label>
+        <label>NIP
+          <input type="text" name="nip" placeholder="198603172009032007" required />
+        </label>
+        <label>Nomor Seri Karpeg
+          <input type="text" name="karpeg" placeholder="P. 083721" />
+        </label>
+        <label>Jenis Kelamin
+          <select name="jenisKelamin">
+            <option value="Perempuan">Perempuan</option>
+            <option value="Laki-laki">Laki-laki</option>
+          </select>
+        </label>
+        <label>Tempat Lahir
+          <input type="text" name="tempatLahir" placeholder="Buton" required />
+        </label>
+        <label>Tanggal Lahir
+          <input type="date" name="tglLahir" required />
+        </label>
+        <label>Pendidikan Terakhir
+          <input type="text" name="pendidikan" placeholder="D-IV Kebidanan" />
+        </label>
+        <label>Jenjang Pendidikan <span class="muted">(untuk saran nilai dasar integrasi)</span>
+          <select name="jenjangPendidikan">
+            <option value="sd">SD</option>
+            <option value="smp">SMP</option>
+            <option value="sma_d1_d2_d3">SMA / D1 / D2 / D3</option>
+            <option value="d4_s1" selected>D4 / S1</option>
+            <option value="s2">S2</option>
+            <option value="s3">S3</option>
+          </select>
+        </label>
+        <label>Pangkat / Golongan Ruang
+          <input type="text" name="pangkatGolongan" placeholder="Penata Muda Tk. I, (III/b)" required />
+        </label>
+        <label>TMT Pangkat
+          <input type="date" name="tmtPangkat" required />
+        </label>
+        <label>Jabatan Fungsional
+          <input type="text" name="jabatan" placeholder="Bidan Ahli Pertama" required />
+        </label>
+        <label>TMT Jabatan
+          <input type="date" name="tmtJabatan" required />
+        </label>
+        <label>Jenjang Jabatan Fungsional <span class="muted">(menentukan koefisien AK)</span>
+          <select name="jenjang" id="jenjang-select" required></select>
+        </label>
+        <label>Masa Kerja Golongan
+          <input type="text" name="masaKerjaGolongan" placeholder="09 Tahun 07 Bulan" />
+        </label>
+        <label>Unit Kerja
+          <input type="text" name="unitKerja" placeholder="RSUD Pasarwajo Kabupaten Buton" required />
+        </label>
+        <label>Instansi Induk
+          <input type="text" name="instansi" placeholder="Dinas Kesehatan Kab. Buton" required />
+        </label>
+      </div>
+      <p class="hint" id="jenjang-hint"></p>
+    </section>
+
+    <section class="card">
+      <h2>3. PAK Integrasi <span class="muted">(opsional)</span></h2>
+      <label class="switch-row">
+        <input type="checkbox" name="adaIntegrasi" id="ada-integrasi" />
+        <span>Sertakan dokumen PAK Integrasi (penyesuaian dari AK konvensional lama ke sistem integrasi)</span>
+      </label>
+      <p class="hint">Aktifkan hanya jika pegawai memiliki riwayat Angka Kredit konvensional (sebelum Permenpan RB No. 1/2023) yang perlu dikonversi. Jika pegawai baru langsung menggunakan sistem integrasi, biarkan nonaktif — aplikasi tetap akan membuat dokumen Akumulasi dan Penetapan Angka Kredit dari hasil konversi predikat kinerja saja.</p>
+
+      <div id="integrasi-fields" class="hidden">
+        <div class="grid-2">
+          <label>Nomor Surat PAK Integrasi
+            <input type="text" name="integrasiNomorSurat" placeholder="800.1.11.1/000/2023" />
+          </label>
+          <label>Masa Penilaian (Awal)
+            <input type="date" name="integrasiMasaAwal" />
+          </label>
+          <label>Masa Penilaian (Akhir)
+            <input type="date" name="integrasiMasaAkhir" />
+          </label>
+          <label>Tempat Penetapan
+            <input type="text" name="integrasiTempatPenetapan" placeholder="Pasarwajo" />
+          </label>
+          <label>Tanggal Penetapan
+            <input type="date" name="integrasiTanggalPenetapan" />
+          </label>
+        </div>
+        <h3>Rincian Angka Kredit Konvensional</h3>
+        <div class="grid-4">
+          <label>Pendidikan
+            <input type="number" step="0.001" name="integrasiPendidikanAK" value="0" />
+          </label>
+          <label>Tugas Pokok
+            <input type="number" step="0.001" name="integrasiTugasPokokAK" value="0" />
+          </label>
+          <label>Pengembangan Profesi
+            <input type="number" step="0.001" name="integrasiPengembanganProfesiAK" value="0" />
+          </label>
+          <label>Unsur Penunjang
+            <input type="number" step="0.001" name="integrasiPenunjangAK" value="0" />
+          </label>
+        </div>
+        <div class="grid-2">
+          <label>Nilai Dasar <span class="muted">(otomatis dari jenjang pendidikan, dapat diubah)</span>
+            <input type="number" step="0.001" name="integrasiNilaiDasar" id="nilai-dasar-input" />
+          </label>
+          <div class="readout">
+            <div>Jumlah AK Konvensional: <strong id="out-jumlah-konvensional">0</strong></div>
+            <div>Nilai AK Integrasi: <strong id="out-nilai-integrasi">0</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Konversi Predikat Kinerja ke Angka Kredit</h2>
+      <p class="hint">Tambahkan periode penilaian sebanyak yang diperlukan — bebas per bulan, dua bulan, enam bulan (semester), atau satu tahun penuh. Angka kredit tiap periode dihitung otomatis: <em>(jumlah bulan ÷ 12) × koefisien tahunan jenjang × persentase predikat</em>.</p>
+      <div id="periode-list"></div>
+      <button type="button" id="btn-add-periode" class="btn btn-secondary">+ Tambah Periode Penilaian</button>
+    </section>
+
+    <section class="card">
+      <h2>5. Penetapan &amp; Pejabat Penilai</h2>
+      <div class="grid-2">
+        <label>AK Dasar yang Diberikan <span class="muted">(jika ada, selain integrasi)</span>
+          <input type="number" step="0.001" name="akDasarDiberikan" value="0" />
+        </label>
+        <label>Nomor Surat — Akumulasi Angka Kredit
+          <input type="text" name="nomorSuratAkumulasi" placeholder="800.1.11.1/003/2024" />
+        </label>
+        <label>Nomor Surat — Penetapan Angka Kredit
+          <input type="text" name="nomorSuratPenetapan" placeholder="800.1.11.1/004/2024" />
+        </label>
+        <label>Tempat Penetapan (dokumen akhir)
+          <input type="text" name="tempatPenetapanAkhir" placeholder="Pasarwajo" required />
+        </label>
+        <label>Tanggal Penetapan (dokumen akhir)
+          <input type="date" name="tanggalPenetapanAkhir" required />
+        </label>
+        <label>Jabatan Pejabat Penilai
+          <input type="text" name="jabatanPenilai" placeholder="Kepala Dinas Kesehatan Kabupaten Buton" required />
+        </label>
+        <label>Nama Pejabat Penilai
+          <input type="text" name="namaPenilai" placeholder="SYAFARUDDIN, SKM., M.Kes." required />
+        </label>
+        <label>NIP Pejabat Penilai
+          <input type="text" name="nipPenilai" placeholder="197303101998031009" required />
+        </label>
+      </div>
+      <div class="grid-2">
+        <label>Nama Pangkat Berikutnya <span class="muted">(opsional, mis. "PENATA (III/c)")</span>
+          <input type="text" name="namaPangkatBerikutnya" placeholder="PENATA (III/c)" />
+        </label>
+        <label>Nama Jenjang Berikutnya <span class="muted">(opsional, mis. "AHLI MUDA")</span>
+          <input type="text" name="namaJenjangBerikutnya" placeholder="AHLI MUDA" />
+        </label>
+      </div>
+      <h3>Tembusan — Dokumen Konversi &amp; Integrasi</h3>
+      <div class="grid-3">
+        <label>Tembusan 1
+          <input type="text" name="tembusan1" placeholder="Direktur BLUD Rumah Sakit Daerah Kabupaten Buton;" />
+        </label>
+        <label>Tembusan 2
+          <input type="text" name="tembusan2" placeholder="Sekretaris Tim Penilai Kinerja;" />
+        </label>
+        <label>Tembusan 3
+          <input type="text" name="tembusan3" placeholder="Kepala Subbag Kepegawaian / Ketatausahaan." />
+        </label>
+      </div>
+      <h3>Tembusan — Dokumen Akumulasi &amp; Penetapan</h3>
+      <div class="grid-3">
+        <label>Tembusan 1
+          <input type="text" name="tembusanFinal1" placeholder="Pejabat Fungsional yang bersangkutan;" />
+        </label>
+        <label>Tembusan 2
+          <input type="text" name="tembusanFinal2" placeholder="Direktur BLUD RSUD;" />
+        </label>
+        <label>Tembusan 3
+          <input type="text" name="tembusanFinal3" placeholder="Kepala Subbag Kepegawaian / Ketatausahaan." />
+        </label>
+      </div>
+    </section>
+
+  </form>
+
+  <aside class="preview-col">
+    <div class="card sticky">
+      <h2>Ringkasan Perhitungan</h2>
+      <table class="preview-table" id="preview-table">
+        <tbody></tbody>
+      </table>
+      <div class="preview-total" id="preview-total">Jumlah Angka Kredit: <strong>0</strong></div>
+
+      <div class="preview-block" id="preview-penetapan"></div>
+
+      <button type="button" id="btn-generate" class="btn btn-primary btn-block">
+        Buat &amp; Unduh Dokumen PAK (.docx)
+      </button>
+      <p class="hint" id="generate-status"></p>
+    </div>
+  </aside>
+</main>
+
+<footer class="footer">
+  <p>Perhitungan mengacu pada Permenpan RB No. 1 Tahun 2023 &amp; Peraturan BKN No. 3 Tahun 2023. Selalu periksa kembali hasil sebelum digunakan sebagai dokumen resmi. Koefisien &amp; ambang batas dapat disesuaikan di <code>js/regulasi.js</code>.</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.6/dist/pizzip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.69.3/build/docxtemplater.js"></script>
+<script src="js/regulasi.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
