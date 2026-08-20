@@ -6,51 +6,46 @@ const bwipjs = require("bwip-js");
 const calc = require("../js/calc.js");
 
 const BULAN_ID = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-function bulanNama(iso) { const m = Number(iso.split("-")[1]); return BULAN_ID[m - 1]; }
+function bulanNama(iso) { return BULAN_ID[Number(iso.split("-")[1]) - 1]; }
 function fmtTanggalID(iso) { const [y,m,d] = iso.split("-").map(Number); return `${String(d).padStart(2,"0")} ${BULAN_ID[m-1]} ${y}`; }
 
-// --- Data pegawai (mengikuti contoh Nurfadilla) ---
-const jenjangKey = "mahir";
-const jenjangKeyAhli = "ahli_pertama";
-
-const integrasiCalc = calc.hitungIntegrasi({
-  pendidikan: 100, tugasPokok: 88.654, pengembanganProfesi: 4, penunjang: 4, nilaiDasar: 100,
-});
-
-const periodeInput = [
-  { mulai: "2023-07-01", selesai: "2023-12-31", jenjang: jenjangKey, predikat: "baik", nomorSurat: "800.1.11.1/001/2024", tempatPenetapan: "Pasarwajo", tanggalPenetapan: "2024-01-02" },
-  { mulai: "2024-07-01", selesai: "2024-11-30", jenjang: jenjangKeyAhli, predikat: "baik", nomorSurat: "800.1.11.1/002/2024", tempatPenetapan: "Pasarwajo", tanggalPenetapan: "2024-12-01" },
-];
-
-const pegawaiRingkas = {
-  nama: "NURFADILLA, S.Tr.Keb",
-  nip: "198603172009032007",
-  karpeg: "P. 083721",
-  ttl: "Buton, 17 Maret 1986",
-  jenisKelamin: "Perempuan",
-  pangkatGolongan: "Penata Muda Tk. I, (III/b)",
-  tmtPangkat: "01/10/2023",
-  jabatan: "Bidan Ahli Pertama",
-  tmtJabatanLabel: "02/07/2024",
-  unitKerja: "RSUD Pasarwajo Kabupaten Buton",
-  instansi: "Dinas Kesehatan Kab. Buton",
-  jabatanPenilai: "Kepala Dinas Kesehatan Kabupaten Buton",
-  namaPenilai: "SYAFARUDDIN, SKM., M.Kes.",
-  nipPenilai: "197303101998031009",
-  tembusan1: "Direktur BLUD Rumah Sakit Daerah Kabupaten Buton;",
-  tembusan2: "Sekretaris Tim Penilai Kinerja RSUD Kab. Buton;",
-  tembusan3: "Kepala Subbag Kepegawaian / Ketatausahaan RSUD Kab. Buton.",
+// Skenario: pegawai baru langsung sistem integrasi (TANPA PAK Integrasi),
+// dengan periode konversi BULANAN (menguji fleksibilitas per-bulan)
+const pegawai = {
+  nama: "AHMAD FAUZI, S.Kom",
+  nip: "199501012020121003",
+  karpeg: "-",
+  ttl: "Kendari, 01 Januari 1995",
+  jenisKelamin: "Laki-laki",
+  pangkatGolongan: "Penata Muda (III/a)",
+  tmtPangkat: "01/12/2020",
+  jabatan: "Pranata Komputer Ahli Pertama",
+  tmtJabatanLabel: "01/12/2020",
+  unitKerja: "Dinas Komunikasi dan Informatika",
+  instansi: "Dinas Kominfo Kab. Buton",
+  jabatanPenilai: "Kepala Dinas Kominfo Kabupaten Buton",
+  namaPenilai: "H. ANDI WIJAYA, S.T., M.T.",
+  nipPenilai: "197001011995031002",
+  tembusan1: "Sekretaris Dinas Kominfo;",
+  tembusan2: "Kepala Bidang Aplikasi Informatika;",
+  tembusan3: "Kepala Subbag Kepegawaian.",
   tembusanFinal1: "Pejabat Fungsional yang bersangkutan;",
-  tembusanFinal2: "Direktur BLUD RSUD;",
-  tembusanFinal3: "Kepala Subbag Kepegawaian / Ketatausahaan RSUD Kab. Buton.",
+  tembusanFinal2: "Sekretaris Dinas Kominfo;",
+  tembusanFinal3: "Kepala Subbag Kepegawaian.",
 };
 
+const periodeInput = [
+  { mulai: "2025-01-01", selesai: "2025-01-31", predikat: "sangat_baik", nomorSurat: "005/2025", tempatPenetapan: "Pasarwajo", tanggalPenetapan: "2025-02-03" },
+  { mulai: "2025-02-01", selesai: "2025-02-28", predikat: "baik", nomorSurat: "006/2025", tempatPenetapan: "Pasarwajo", tanggalPenetapan: "2025-03-03" },
+  { mulai: "2025-03-01", selesai: "2025-04-30", predikat: "baik", nomorSurat: "007/2025", tempatPenetapan: "Pasarwajo", tanggalPenetapan: "2025-05-03" },
+];
+
+const jenjangKey = "ahli_pertama";
 const periodeList = periodeInput.map((per) => {
-  const bulan = (new Date(per.selesai).getFullYear() - new Date(per.mulai).getFullYear()) * 12 +
-    (new Date(per.selesai).getMonth() - new Date(per.mulai).getMonth()) + 1;
-  const hasil = calc.hitungKonversiPeriode(per.jenjang, per.predikat, bulan);
+  const bulan = calc.jumlahBulanInklusif(per.mulai, per.selesai);
+  const hasil = calc.hitungKonversiPeriode(jenjangKey, per.predikat, bulan);
   return {
-    ...pegawaiRingkas,
+    ...pegawai,
     tahunLabel: per.mulai.slice(0, 4),
     periodikLabel: `${bulanNama(per.mulai)} - ${bulanNama(per.selesai)}`,
     periodeLabel: `${fmtTanggalID(per.mulai)} - ${fmtTanggalID(per.selesai)}`,
@@ -66,50 +61,37 @@ const periodeList = periodeInput.map((per) => {
 });
 
 const akumulasi = calc.hitungAkumulasi({
-  nilaiIntegrasiAwal: integrasiCalc.nilaiIntegrasi,
+  nilaiIntegrasiAwal: null, // TANPA PAK Integrasi
   periodeList: periodeList.map((p) => ({ hasil: { angkaKredit: p.angkaKreditRaw } })),
 });
 
 const penetapan = calc.hitungPenetapan({
-  jenjangKey: jenjangKeyAhli,
-  akDasarDiberikan: 0,
-  akJFLama: integrasiCalc.nilaiIntegrasi,
-  akKonversiBaru: akumulasi.totalAngkaKredit - integrasiCalc.nilaiIntegrasi,
-  namaPangkatBerikutnya: "PENATA (III/c)",
+  jenjangKey,
+  akDasarDiberikan: 100,
+  akJFLama: 0,
+  akKonversiBaru: akumulasi.totalAngkaKredit,
 });
 
-const semuaTglMulai = periodeInput.map(p => p.mulai).sort();
-const semuaTglSelesai = periodeInput.map(p => p.selesai).sort();
-const periodeTotalLabel = `${fmtTanggalID(semuaTglMulai[0])} - ${fmtTanggalID(semuaTglSelesai[semuaTglSelesai.length-1])}`;
-
 const data = {
-  kopOPD: "DINAS KESEHATAN",
-  kopAlamat: "Kecamatan Pasarwajo, Kabupaten Buton, Provinsi Sulawesi Tenggara",
-  ...pegawaiRingkas,
-  pendidikan: "D-IV Kebidanan",
-  masaKerjaGolongan: "09 Tahun 07 Bulan",
+  kopOPD: "DINAS KOMUNIKASI DAN INFORMATIKA",
+  kopAlamat: "Kecamatan Pasarwajo, Kabupaten Buton",
+  ...pegawai,
+  pendidikan: "S1 Ilmu Komputer",
+  masaKerjaGolongan: "04 Tahun 02 Bulan",
 
-  adaIntegrasi: true,
-  integrasiTempatPenetapan: "Pasarwajo",
-  integrasiTanggalPenetapan: "30 Juni 2023",
-  integrasiNomorSurat: "800.1.11.1/000/2023",
-  integrasiMasaPenilaian: "01 Januari 2021 - 30 Juni 2023",
-  integrasiTahunLabel: "2023",
-  integrasiPendidikanAK: calc.fmtID(100),
-  integrasiTugasPokokAK: calc.fmtID(88.654),
-  integrasiPengembanganProfesiAK: calc.fmtID(4),
-  integrasiPenunjangAK: calc.fmtID(4),
-  integrasiJumlahKonvensional: calc.fmtID(integrasiCalc.jumlahKonvensional),
-  integrasiNilaiDasar: calc.fmtID(integrasiCalc.nilaiDasar),
-  integrasiNilaiIntegrasi: calc.fmtID(integrasiCalc.nilaiIntegrasi),
+  adaIntegrasi: false,
+  integrasiTempatPenetapan: "", integrasiTanggalPenetapan: "", integrasiNomorSurat: "",
+  integrasiMasaPenilaian: "", integrasiTahunLabel: "",
+  integrasiPendidikanAK: "", integrasiTugasPokokAK: "", integrasiPengembanganProfesiAK: "",
+  integrasiPenunjangAK: "", integrasiJumlahKonvensional: "", integrasiNilaiDasar: "", integrasiNilaiIntegrasi: "",
 
   periodeList,
-  periodeTotalLabel,
+  periodeTotalLabel: `${fmtTanggalID(periodeInput[0].mulai)} - ${fmtTanggalID(periodeInput[periodeInput.length - 1].selesai)}`,
 
-  nomorSuratAkumulasi: "800.1.11.1/003/2024",
+  nomorSuratAkumulasi: "008/2025",
   akumulasiTotal: calc.fmtID(akumulasi.totalAngkaKredit),
 
-  nomorSuratPenetapan: "800.1.11.1/004/2024",
+  nomorSuratPenetapan: "009/2025",
   penetapanAkDasarDiberikan: calc.fmtID(penetapan.akDasarDiberikan),
   penetapanAkJFLama: calc.fmtID(penetapan.akJFLama),
   penetapanAkKonversiBaru: calc.fmtID(penetapan.akKonversiBaru),
@@ -122,10 +104,10 @@ const data = {
   penetapanKesimpulanJenjang: penetapan.kesimpulanJenjang,
 
   tempatPenetapanAkhir: "Pasarwajo",
-  tanggalPenetapanAkhir: "01 Desember 2024",
-};
+  tanggalPenetapanAkhir: "03 Mei 2025",
 
-const qrTeks = `NIP: ${pegawaiRingkas.nip}\nNama: ${pegawaiRingkas.nama}\nPangkat/Golongan: ${pegawaiRingkas.pangkatGolongan}`;
+  qr: `NIP: ${pegawai.nip}\nNama: ${pegawai.nama}\nPangkat/Golongan: ${pegawai.pangkatGolongan}`,
+};
 
 function tukarPlaceholderQr(zip, qrBytes) {
   const LOGO_MIN_SIZE = 50000;
@@ -144,11 +126,7 @@ function tukarPlaceholderQr(zip, qrBytes) {
 }
 
 async function main() {
-  const qrPng = await bwipjs.toBuffer({
-    bcid: "qrcode",
-    text: qrTeks,
-    scale: 3, includetext: false,
-  });
+  const qrPng = await bwipjs.toBuffer({ bcid: "qrcode", text: data.qr, scale: 3, includetext: false });
 
   const content = fs.readFileSync(path.join(__dirname, "..", "templates", "template.docx"), "binary");
   const zip = new PizZip(content);
@@ -157,14 +135,17 @@ async function main() {
 
   const outZip = doc.getZip();
   const jumlahTukar = tukarPlaceholderQr(outZip, qrPng);
-  console.log("Placeholder QR ditukar:", jumlahTukar, "file");
   if (jumlahTukar === 0) throw new Error("Tidak ada placeholder QR ditemukan!");
 
   const buf = outZip.generate({ type: "nodebuffer" });
-  fs.writeFileSync(path.join(__dirname, "..", "test-output.docx"), buf);
-  console.log("OK -> test-output.docx");
-  console.log("Akumulasi total:", akumulasi.totalAngkaKredit, "(harus 108.112)");
+  fs.writeFileSync(path.join(__dirname, "..", "test-tanpa-integrasi.docx"), buf);
+
+  console.log("Jumlah periode bulanan:", periodeList.length);
+  console.log("Detail per periode:", periodeList.map((p) => p.angkaKredit));
+  console.log("Total AK:", akumulasi.totalAngkaKredit, "(harus 4.688)");
   console.log("Penetapan:", penetapan);
+  if (Math.abs(akumulasi.totalAngkaKredit - 4.688) > 0.001) throw new Error("Total AK salah!");
+  console.log("\n✅ Skenario tanpa integrasi + periode bulanan: OK");
 }
 
 main().catch((e) => { console.error("GAGAL:", e); process.exit(1); });
