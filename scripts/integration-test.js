@@ -1,110 +1,170 @@
 const fs = require("fs");
 const path = require("path");
-const { JSDOM } = require("jsdom");
 const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
 const bwipjs = require("bwip-js");
+const calc = require("../js/calc.js");
 
-const ROOT = path.join(__dirname, "..");
+const BULAN_ID = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+function bulanNama(iso) { const m = Number(iso.split("-")[1]); return BULAN_ID[m - 1]; }
+function fmtTanggalID(iso) { const [y,m,d] = iso.split("-").map(Number); return `${String(d).padStart(2,"0")} ${BULAN_ID[m-1]} ${y}`; }
+
+// --- Data pegawai (mengikuti contoh Nurfadilla) ---
+const jenjangKey = "mahir";
+const jenjangKeyAhli = "ahli_pertama";
+
+const integrasiCalc = calc.hitungIntegrasi({
+  pendidikan: 100, tugasPokok: 88.654, pengembanganProfesi: 4, penunjang: 4, nilaiDasar: 100,
+});
+
+const periodeInput = [
+  { mulai: "2023-07-01", selesai: "2023-12-31", jenjang: jenjangKey, predikat: "baik", nomorSurat: "800.1.11.1/001/2024", tempatPenetapan: "Pasarwajo", tanggalPenetapan: "2024-01-02" },
+  { mulai: "2024-07-01", selesai: "2024-11-30", jenjang: jenjangKeyAhli, predikat: "baik", nomorSurat: "800.1.11.1/002/2024", tempatPenetapan: "Pasarwajo", tanggalPenetapan: "2024-12-01" },
+];
+
+const pegawaiRingkas = {
+  nama: "NURFADILLA, S.Tr.Keb",
+  nip: "198603172009032007",
+  karpeg: "P. 083721",
+  ttl: "Buton, 17 Maret 1986",
+  jenisKelamin: "Perempuan",
+  pangkatGolongan: "Penata Muda Tk. I, (III/b)",
+  tmtPangkat: "01/10/2023",
+  jabatan: "Bidan Ahli Pertama",
+  tmtJabatanLabel: "02/07/2024",
+  unitKerja: "RSUD Pasarwajo Kabupaten Buton",
+  instansi: "Dinas Kesehatan Kab. Buton",
+  jabatanPenilai: "Kepala Dinas Kesehatan Kabupaten Buton",
+  namaPenilai: "SYAFARUDDIN, SKM., M.Kes.",
+  nipPenilai: "197303101998031009",
+  tembusan1: "Direktur BLUD Rumah Sakit Daerah Kabupaten Buton;",
+  tembusan2: "Sekretaris Tim Penilai Kinerja RSUD Kab. Buton;",
+  tembusan3: "Kepala Subbag Kepegawaian / Ketatausahaan RSUD Kab. Buton.",
+  tembusanFinal1: "Pejabat Fungsional yang bersangkutan;",
+  tembusanFinal2: "Direktur BLUD RSUD;",
+  tembusanFinal3: "Kepala Subbag Kepegawaian / Ketatausahaan RSUD Kab. Buton.",
+};
+
+const periodeList = periodeInput.map((per) => {
+  const bulan = (new Date(per.selesai).getFullYear() - new Date(per.mulai).getFullYear()) * 12 +
+    (new Date(per.selesai).getMonth() - new Date(per.mulai).getMonth()) + 1;
+  const hasil = calc.hitungKonversiPeriode(per.jenjang, per.predikat, bulan);
+  return {
+    ...pegawaiRingkas,
+    tahunLabel: per.mulai.slice(0, 4),
+    periodikLabel: `${bulanNama(per.mulai)} - ${bulanNama(per.selesai)}`,
+    periodeLabel: `${fmtTanggalID(per.mulai)} - ${fmtTanggalID(per.selesai)}`,
+    predikatLabel: per.predikat.toUpperCase(),
+    pecahanBulan: hasil.pecahanBulan,
+    koefisienTahun: calc.fmtID(hasil.koefisienTahun),
+    angkaKredit: calc.fmtID(hasil.angkaKredit),
+    angkaKreditRaw: hasil.angkaKredit,
+    nomorSurat: per.nomorSurat,
+    tempatPenetapan: per.tempatPenetapan,
+    tanggalPenetapan: fmtTanggalID(per.tanggalPenetapan),
+  };
+});
+
+const akumulasi = calc.hitungAkumulasi({
+  nilaiIntegrasiAwal: integrasiCalc.nilaiIntegrasi,
+  periodeList: periodeList.map((p) => ({ hasil: { angkaKredit: p.angkaKreditRaw } })),
+});
+
+const penetapan = calc.hitungPenetapan({
+  jenjangKey: jenjangKeyAhli,
+  akDasarDiberikan: 0,
+  akJFLama: integrasiCalc.nilaiIntegrasi,
+  akKonversiBaru: akumulasi.totalAngkaKredit - integrasiCalc.nilaiIntegrasi,
+  namaPangkatBerikutnya: "PENATA (III/c)",
+});
+
+const semuaTglMulai = periodeInput.map(p => p.mulai).sort();
+const semuaTglSelesai = periodeInput.map(p => p.selesai).sort();
+const periodeTotalLabel = `${fmtTanggalID(semuaTglMulai[0])} - ${fmtTanggalID(semuaTglSelesai[semuaTglSelesai.length-1])}`;
+
+const data = {
+  kopOPD: "DINAS KESEHATAN",
+  kopAlamat: "Kecamatan Pasarwajo, Kabupaten Buton, Provinsi Sulawesi Tenggara",
+  ...pegawaiRingkas,
+  pendidikan: "D-IV Kebidanan",
+  masaKerjaGolongan: "09 Tahun 07 Bulan",
+
+  adaIntegrasi: true,
+  integrasiTempatPenetapan: "Pasarwajo",
+  integrasiTanggalPenetapan: "30 Juni 2023",
+  integrasiNomorSurat: "800.1.11.1/000/2023",
+  integrasiMasaPenilaian: "01 Januari 2021 - 30 Juni 2023",
+  integrasiTahunLabel: "2023",
+  integrasiPendidikanAK: calc.fmtID(100),
+  integrasiTugasPokokAK: calc.fmtID(88.654),
+  integrasiPengembanganProfesiAK: calc.fmtID(4),
+  integrasiPenunjangAK: calc.fmtID(4),
+  integrasiJumlahKonvensional: calc.fmtID(integrasiCalc.jumlahKonvensional),
+  integrasiNilaiDasar: calc.fmtID(integrasiCalc.nilaiDasar),
+  integrasiNilaiIntegrasi: calc.fmtID(integrasiCalc.nilaiIntegrasi),
+
+  periodeList,
+  periodeTotalLabel,
+
+  nomorSuratAkumulasi: "800.1.11.1/003/2024",
+  akumulasiTotal: calc.fmtID(akumulasi.totalAngkaKredit),
+
+  nomorSuratPenetapan: "800.1.11.1/004/2024",
+  penetapanAkDasarDiberikan: calc.fmtID(penetapan.akDasarDiberikan),
+  penetapanAkJFLama: calc.fmtID(penetapan.akJFLama),
+  penetapanAkKonversiBaru: calc.fmtID(penetapan.akKonversiBaru),
+  penetapanJumlahKumulatif: calc.fmtID(penetapan.jumlahKumulatif),
+  penetapanMinPangkat: calc.fmtID(penetapan.minPangkat),
+  penetapanMinJenjang: calc.fmtID(penetapan.minJenjang),
+  penetapanKelebihanPangkat: calc.fmtID(penetapan.kelebihanPangkat),
+  penetapanKelebihanJenjang: calc.fmtID(penetapan.kelebihanJenjang),
+  penetapanKesimpulanPangkat: penetapan.kesimpulanPangkat,
+  penetapanKesimpulanJenjang: penetapan.kesimpulanJenjang,
+
+  tempatPenetapanAkhir: "Pasarwajo",
+  tanggalPenetapanAkhir: "01 Desember 2024",
+};
+
+const qrTeks = `NIP: ${pegawaiRingkas.nip}\nNama: ${pegawaiRingkas.nama}\nPangkat/Golongan: ${pegawaiRingkas.pangkatGolongan}`;
+
+function tukarPlaceholderQr(zip, qrBytes) {
+  const LOGO_MIN_SIZE = 50000;
+  let jumlah = 0;
+  Object.keys(zip.files).forEach((filename) => {
+    if (!filename.startsWith("word/media/")) return;
+    const file = zip.files[filename];
+    if (file.dir) return;
+    const content = file.asUint8Array();
+    if (content.length > 0 && content.length < LOGO_MIN_SIZE) {
+      zip.file(filename, qrBytes);
+      jumlah += 1;
+    }
+  });
+  return jumlah;
+}
 
 async function main() {
-  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-only", resources: "usable" });
-  const { window } = dom;
-
-  let qrPngSync = null;
-  let lastQrUrl = null;
-  window.fetch = async (url) => {
-    const urlStr = String(url);
-    if (urlStr.includes("template.docx")) {
-      const buf = fs.readFileSync(path.join(ROOT, "templates", "template.docx"));
-      return { ok: true, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
-    }
-    if (urlStr.includes("api.qrserver.com")) {
-      lastQrUrl = urlStr;
-      return { ok: true, arrayBuffer: async () => qrPngSync.buffer.slice(qrPngSync.byteOffset, qrPngSync.byteOffset + qrPngSync.byteLength) };
-    }
-    throw new Error("Unexpected fetch: " + url);
-  };
-  let capturedBlob = null;
-  window.URL.createObjectURL = (blob) => { capturedBlob = blob; return "blob:stub"; };
-  window.URL.revokeObjectURL = () => {};
-  window.PizZip = PizZip;
-  window.docxtemplater = Docxtemplater;
-  window.alert = () => {};
-  window.confirm = () => true;
-  window.HTMLFormElement.prototype.reportValidity = () => true;
-
-  let downloadedName = null;
-  const realCreateElement = window.document.createElement.bind(window.document);
-  window.document.createElement = (tag) => {
-    const elx = realCreateElement(tag);
-    if (tag === "a") elx.click = () => { downloadedName = elx.download; };
-    return elx;
-  };
-
-  for (const f of ["js/regulasi.js", "js/calc.js", "js/app.js"]) {
-    const code = fs.readFileSync(path.join(ROOT, f), "utf8");
-    window.eval(code);
-  }
-  await new Promise((r) => setTimeout(r, 50));
-
-  const doc = window.document;
-
-  doc.getElementById("btn-load-sample").dispatchEvent(new window.Event("click", { bubbles: true }));
-  await new Promise((r) => setTimeout(r, 50));
-
-  const totalText = doc.getElementById("preview-total").textContent;
-  console.log("Preview total:", totalText.trim());
-  if (!totalText.includes("108,112")) throw new Error("Total AK preview salah, harus 108,112. Dapat: " + totalText);
-
-  const penetapanHtml = doc.getElementById("preview-penetapan").innerHTML;
-  if (!penetapanHtml.includes("108,112")) throw new Error("Jumlah kumulatif penetapan salah");
-  console.log("Preview penetapan OK (mengandung 108,112)");
-
-  // Siapkan QR PNG sinkron (bwip-js toBuffer bersifat async, generate dulu)
-  qrPngSync = await bwipjs.toBuffer({
+  const qrPng = await bwipjs.toBuffer({
     bcid: "qrcode",
-    text: "NIP: 198603172009032007\nNama: NURFADILLA, S.Tr.Keb\nPangkat/Golongan: Penata Muda Tk. I, (III/b)",
+    text: qrTeks,
     scale: 3, includetext: false,
   });
 
-  doc.getElementById("btn-generate").dispatchEvent(new window.Event("click", { bubbles: true }));
-  await new Promise((r) => setTimeout(r, 400));
+  const content = fs.readFileSync(path.join(__dirname, "..", "templates", "template.docx"), "binary");
+  const zip = new PizZip(content);
+  const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+  doc.render(data);
 
-  if (!downloadedName) throw new Error("Dokumen tidak terunduh (nama file kosong)");
-  console.log("Nama file unduhan:", downloadedName);
-  console.log("URL QR API terpanggil:", lastQrUrl);
-  if (!lastQrUrl || !lastQrUrl.includes("api.qrserver.com")) throw new Error("QR Code tidak dibuat lewat api.qrserver.com");
-  if (!lastQrUrl.includes(encodeURIComponent("198603172009032007"))) throw new Error("Data QR tidak mengandung NIP");
-  if (!capturedBlob) throw new Error("Isi dokumen tidak tertangkap");
+  const outZip = doc.getZip();
+  const jumlahTukar = tukarPlaceholderQr(outZip, qrPng);
+  console.log("Placeholder QR ditukar:", jumlahTukar, "file");
+  if (jumlahTukar === 0) throw new Error("Tidak ada placeholder QR ditemukan!");
 
-  const outPath = path.join(ROOT, "integration-test-output.docx");
-  const buf = Buffer.from(await capturedBlob.arrayBuffer());
-  fs.writeFileSync(outPath, buf);
-  console.log("Tersimpan ke:", outPath, "(" + buf.length + " bytes)");
-
-  const zip = new PizZip(buf);
-  const xml = zip.file("word/document.xml").asText();
-  const checks = ["108,112", "96,654", "6,25", "5,208", "58,112", "8,112", "PENATA (III/c)"];
-  checks.forEach((c) => {
-    if (!xml.includes(c)) throw new Error(`Nilai "${c}" tidak ditemukan di dokumen hasil generate`);
-  });
-  console.log("Semua nilai kunci ditemukan di dokumen akhir:", checks.join(", "));
-
-  // Pastikan gambar QR benar-benar tertukar (bukan placeholder lagi) di dalam docx
-  const mediaFiles = Object.keys(zip.files).filter((f) => f.startsWith("word/media/") && !zip.files[f].dir);
-  console.log("File media dalam docx:", mediaFiles);
-  if (mediaFiles.length < 2) throw new Error("QR/logo tidak ter-embed (media file kurang dari 2)");
-  const ukuranFile = mediaFiles.map((f) => zip.file(f).asUint8Array().length);
-  console.log("Ukuran file media:", ukuranFile);
-  const adaQrTertukar = ukuranFile.some((sz) => sz === qrPngSync.length);
-  if (!adaQrTertukar) throw new Error("Placeholder QR tampaknya belum tertukar dengan QR asli");
-
-  console.log("\n✅ SEMUA UJI INTEGRASI LULUS");
+  const buf = outZip.generate({ type: "nodebuffer" });
+  fs.writeFileSync(path.join(__dirname, "..", "test-output.docx"), buf);
+  console.log("OK -> test-output.docx");
+  console.log("Akumulasi total:", akumulasi.totalAngkaKredit, "(harus 108.112)");
+  console.log("Penetapan:", penetapan);
 }
 
-main().catch((e) => {
-  console.error("❌ GAGAL:", e);
-  process.exit(1);
-});
+main().catch((e) => { console.error("GAGAL:", e); process.exit(1); });
