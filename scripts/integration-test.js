@@ -12,10 +12,17 @@ async function main() {
   const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-only", resources: "usable" });
   const { window } = dom;
 
+  let qrPngSync = null;
+  let lastQrUrl = null;
   window.fetch = async (url) => {
-    if (String(url).includes("template.docx")) {
+    const urlStr = String(url);
+    if (urlStr.includes("template.docx")) {
       const buf = fs.readFileSync(path.join(ROOT, "templates", "template.docx"));
       return { ok: true, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
+    }
+    if (urlStr.includes("api.qrserver.com")) {
+      lastQrUrl = urlStr;
+      return { ok: true, arrayBuffer: async () => qrPngSync.buffer.slice(qrPngSync.byteOffset, qrPngSync.byteOffset + qrPngSync.byteLength) };
     }
     throw new Error("Unexpected fetch: " + url);
   };
@@ -27,16 +34,6 @@ async function main() {
   window.alert = () => {};
   window.confirm = () => true;
   window.HTMLFormElement.prototype.reportValidity = () => true;
-
-  // jsdom tidak mendukung <canvas> asli (butuh binding native) -> stub JsBarcode
-  // dengan bwip-js (barcode generator berbasis JS murni) supaya alur tetap teruji.
-  let lastBarcodeText = null;
-  let barcodePngSync = null;
-  window.JsBarcode = function (canvas, text) {
-    lastBarcodeText = text;
-    canvas.toDataURL = () => "data:image/png;base64," + barcodePngSync.toString("base64");
-    canvas.width = 300; canvas.height = 80;
-  };
 
   let downloadedName = null;
   const realCreateElement = window.document.createElement.bind(window.document);
@@ -65,16 +62,21 @@ async function main() {
   if (!penetapanHtml.includes("108,112")) throw new Error("Jumlah kumulatif penetapan salah");
   console.log("Preview penetapan OK (mengandung 108,112)");
 
-  // Siapkan barcode PNG sinkron (bwip-js toBuffer bersifat async, generate dulu)
-  barcodePngSync = await bwipjs.toBuffer({ bcid: "code128", text: "198603172009032007|NURFADILLA, S.Tr.Keb", scale: 3, height: 10, includetext: false });
+  // Siapkan QR PNG sinkron (bwip-js toBuffer bersifat async, generate dulu)
+  qrPngSync = await bwipjs.toBuffer({
+    bcid: "qrcode",
+    text: "NIP: 198603172009032007\nNama: NURFADILLA, S.Tr.Keb\nPangkat/Golongan: Penata Muda Tk. I, (III/b)",
+    scale: 3, includetext: false,
+  });
 
   doc.getElementById("btn-generate").dispatchEvent(new window.Event("click", { bubbles: true }));
   await new Promise((r) => setTimeout(r, 400));
 
   if (!downloadedName) throw new Error("Dokumen tidak terunduh (nama file kosong)");
   console.log("Nama file unduhan:", downloadedName);
-  console.log("Teks barcode terdeteksi:", lastBarcodeText);
-  if (lastBarcodeText !== "198603172009032007|NURFADILLA, S.Tr.Keb") throw new Error("Isi barcode salah: " + lastBarcodeText);
+  console.log("URL QR API terpanggil:", lastQrUrl);
+  if (!lastQrUrl || !lastQrUrl.includes("api.qrserver.com")) throw new Error("QR Code tidak dibuat lewat api.qrserver.com");
+  if (!lastQrUrl.includes(encodeURIComponent("198603172009032007"))) throw new Error("Data QR tidak mengandung NIP");
   if (!capturedBlob) throw new Error("Isi dokumen tidak tertangkap");
 
   const outPath = path.join(ROOT, "integration-test-output.docx");
@@ -90,14 +92,14 @@ async function main() {
   });
   console.log("Semua nilai kunci ditemukan di dokumen akhir:", checks.join(", "));
 
-  // Pastikan gambar barcode benar-benar tertukar (bukan placeholder lagi) di dalam docx
+  // Pastikan gambar QR benar-benar tertukar (bukan placeholder lagi) di dalam docx
   const mediaFiles = Object.keys(zip.files).filter((f) => f.startsWith("word/media/") && !zip.files[f].dir);
   console.log("File media dalam docx:", mediaFiles);
-  if (mediaFiles.length < 2) throw new Error("Barcode/logo tidak ter-embed (media file kurang dari 2)");
+  if (mediaFiles.length < 2) throw new Error("QR/logo tidak ter-embed (media file kurang dari 2)");
   const ukuranFile = mediaFiles.map((f) => zip.file(f).asUint8Array().length);
   console.log("Ukuran file media:", ukuranFile);
-  const adaBarcodeTertukar = ukuranFile.some((sz) => sz === barcodePngSync.length);
-  if (!adaBarcodeTertukar) throw new Error("Placeholder barcode tampaknya belum tertukar dengan barcode asli");
+  const adaQrTertukar = ukuranFile.some((sz) => sz === qrPngSync.length);
+  if (!adaQrTertukar) throw new Error("Placeholder QR tampaknya belum tertukar dengan QR asli");
 
   console.log("\n✅ SEMUA UJI INTEGRASI LULUS");
 }
