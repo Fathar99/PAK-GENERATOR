@@ -17,7 +17,7 @@ const {
 
 const FONT = "Cambria";
 const LOGO_PATH = path.join(__dirname, "..", "assets", "logo-buton.png");
-const BARCODE_PLACEHOLDER_PATH = path.join(__dirname, "..", "assets", "barcode-placeholder.png");
+const QR_PLACEHOLDER_PATH = path.join(__dirname, "..", "assets", "qr-placeholder.png");
 
 // ---------- util dasar ----------
 function txt(text, opts = {}) {
@@ -70,25 +70,17 @@ function kopSurat() {
     logoImage = null;
   }
 
-  let barcodeImage;
-  try {
-    const barcodeData = fs.readFileSync(BARCODE_PLACEHOLDER_PATH);
-    barcodeImage = new ImageRun({ data: barcodeData, transformation: { width: 100, height: 30 }, type: "png" });
-  } catch (e) {
-    barcodeImage = null;
-  }
-
   const rows = [
     new TableRow({
       children: [
         new TableCell({
-          width: { size: 850, type: WidthType.DXA },
+          width: { size: 950, type: WidthType.DXA },
           borders: noBorders(),
           verticalAlign: VerticalAlign.TOP,
           children: [new Paragraph({ children: logoImage ? [logoImage] : [txt("")], alignment: AlignmentType.CENTER })],
         }),
         new TableCell({
-          width: { size: 7850, type: WidthType.DXA },
+          width: { size: 8850, type: WidthType.DXA },
           borders: noBorders(),
           verticalAlign: VerticalAlign.CENTER,
           children: [
@@ -96,12 +88,6 @@ function kopSurat() {
             p(txt("{kopOPD}", { size: 36, bold: true }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
             p(txt("{kopAlamat}", { size: 24 }), { alignment: AlignmentType.CENTER, spacing: { after: 0 } }),
           ],
-        }),
-        new TableCell({
-          width: { size: 1100, type: WidthType.DXA },
-          borders: noBorders(),
-          verticalAlign: VerticalAlign.CENTER,
-          children: [new Paragraph({ children: barcodeImage ? [barcodeImage] : [txt("")], alignment: AlignmentType.CENTER })],
         }),
       ],
     }),
@@ -111,7 +97,7 @@ function kopSurat() {
     new Table({
       width: { size: 9800, type: WidthType.DXA },
       layout: TableLayoutType.FIXED,
-      columnWidths: [850, 7850, 1100],
+      columnWidths: [950, 8850],
       borders: noBorders(),
       rows,
     }),
@@ -205,23 +191,22 @@ function pegawaiTableBernomor(fields, withRomanI) {
     rows.push(new TableRow({
       children: [
         cell("I", { width: 500, align: AlignmentType.CENTER }),
-        cell("KETERANGAN PERORANGAN", { colSpan: 3, align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("KETERANGAN PERORANGAN", { colSpan: 2, align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ],
     }));
     fields.forEach(([label, tagExpr], i) => {
       rows.push(new TableRow({
         children: [
-          cell("", { width: 500 }),
           cell(String(i + 1), { width: 500, align: AlignmentType.CENTER }),
-          cell(label, { width: 3300 }),
-          cell(tagExpr, { width: 4500 }),
+          cell(label, { width: 3800 }),
+          cell(tagExpr, { width: 4700 }),
         ],
       }));
     });
     return new Table({
-      width: { size: 8800, type: WidthType.DXA },
+      width: { size: 9000, type: WidthType.DXA },
       layout: TableLayoutType.FIXED,
-      columnWidths: [500, 500, 3300, 4500],
+      columnWidths: [500, 3800, 4700],
       rows,
     });
   }
@@ -263,14 +248,51 @@ function pegawaiTableTanpaNomor(fields) {
   });
 }
 function signatureBlock(tempatTag, tanggalTag, jabatanExpr, namaTag, nipTag) {
-  const indent = { left: 5000 };
+  let qrImage;
+  try {
+    const qrData = fs.readFileSync(QR_PLACEHOLDER_PATH);
+    qrImage = new ImageRun({ data: qrData, transformation: { width: 78, height: 78 }, type: "png" });
+  } catch (e) {
+    qrImage = null;
+  }
+
   return [
     p(txt(""), { spacing: { before: 200, after: 0 } }),
-    p([txt("Ditetapkan di "), txt(`{${tempatTag}}`)], { indent, spacing: { after: 0 } }),
-    p([txt("Pada tanggal "), txt(`{${tanggalTag}}`)], { indent, spacing: { after: 0 } }),
-    p(txt(jabatanExpr), { indent, spacing: { after: 480 } }),
-    p(txt(`{${namaTag}}`, { bold: true }), { indent, spacing: { after: 0 } }),
-    p([txt("NIP "), txt(`{${nipTag}}`)], { indent, spacing: { after: 200 } }),
+    new Table({
+      width: { size: 9800, type: WidthType.DXA },
+      layout: TableLayoutType.FIXED,
+      columnWidths: [4300, 1400, 4100],
+      borders: noBorders(),
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 4300, type: WidthType.DXA },
+              borders: noBorders(),
+              children: [p(txt(""))],
+            }),
+            new TableCell({
+              width: { size: 1400, type: WidthType.DXA },
+              borders: noBorders(),
+              verticalAlign: VerticalAlign.CENTER,
+              children: [new Paragraph({ children: qrImage ? [qrImage] : [txt("")], alignment: AlignmentType.CENTER })],
+            }),
+            new TableCell({
+              width: { size: 4100, type: WidthType.DXA },
+              borders: noBorders(),
+              verticalAlign: VerticalAlign.CENTER,
+              children: [
+                p([txt("Ditetapkan di "), txt(`{${tempatTag}}`)], { spacing: { after: 0 } }),
+                p([txt("Pada tanggal "), txt(`{${tanggalTag}}`)], { spacing: { after: 0 } }),
+                p(txt(jabatanExpr), { spacing: { after: 480 } }),
+                p(txt(`{${namaTag}}`, { bold: true }), { spacing: { after: 0 } }),
+                p([txt("NIP "), txt(`{${nipTag}}`)], { spacing: { after: 200 } }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    }),
   ];
 }
 
@@ -356,46 +378,49 @@ function sectionIntegrasi() {
   ], true));
   out.push(new Table({
     width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
-    columnWidths: [1700, 1900, 2000, 3400],
+    columnWidths: [500, 1600, 1300, 2100, 3500],
     rows: [
-      headerRowFull("PERHITUNGAN PENYESUAIAN ANGKA KREDIT DARI KONVENSIONAL KE INTEGRASI", 4),
+      headerRowFull("PERHITUNGAN PENYESUAIAN ANGKA KREDIT DARI KONVENSIONAL KE INTEGRASI", 5),
       new TableRow({ children: [
         cell("II", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
-        cell("ANGKA KREDIT KONVENSIONAL", { colSpan: 1, align: AlignmentType.CENTER, textOpts: { bold: true } }),
-        cell("", {}),
-        cell("ANGKA KREDIT INTEGRASI", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("ANGKA KREDIT KONVENSIONAL", { colSpan: 2, align: AlignmentType.CENTER, textOpts: { bold: true } }),
+        cell("ANGKA KREDIT INTEGRASI", { colSpan: 2, align: AlignmentType.CENTER, textOpts: { bold: true } }),
       ]}),
       new TableRow({ children: [
         cell("", { shade: true }),
-        cell("1", { align: AlignmentType.CENTER, shade: true, colSpan: 1 }),
-        cell("", { shade: true }),
-        cell("2", { align: AlignmentType.CENTER, shade: true }),
+        cell("1", { align: AlignmentType.CENTER, shade: true, colSpan: 2 }),
+        cell("2", { align: AlignmentType.CENTER, shade: true, colSpan: 2 }),
       ]}),
       new TableRow({ children: [
-        cell("1. Pendidikan", { width: 1700 }),
+        cell("1", { align: AlignmentType.CENTER }),
+        cell("Pendidikan"),
         cell("{integrasiPendidikanAK}", { align: AlignmentType.CENTER }),
         cell("Tugas Jabatan", { vMerge: VerticalMergeType.RESTART }),
         cell("{integrasiNilaiIntegrasi}", { align: AlignmentType.CENTER, vMerge: VerticalMergeType.RESTART }),
       ]}),
       new TableRow({ children: [
-        cell("2. Tugas Pokok", { width: 1700 }),
+        cell("2", { align: AlignmentType.CENTER }),
+        cell("Tugas Pokok"),
         cell("{integrasiTugasPokokAK}", { align: AlignmentType.CENTER }),
         cell("", { vMerge: VerticalMergeType.CONTINUE }),
         cell("", { vMerge: VerticalMergeType.CONTINUE }),
       ]}),
       new TableRow({ children: [
-        cell("3. Pengembangan Profesi", { width: 1700 }),
+        cell("3", { align: AlignmentType.CENTER }),
+        cell("Pengembangan Profesi"),
         cell("{integrasiPengembanganProfesiAK}", { align: AlignmentType.CENTER }),
         cell("Pengembangan Profesi", {}),
         cell("", {}),
       ]}),
       new TableRow({ children: [
-        cell("4. Unsur Penunjang", { width: 1700 }),
+        cell("4", { align: AlignmentType.CENTER }),
+        cell("Unsur Penunjang"),
         cell("{integrasiPenunjangAK}", { align: AlignmentType.CENTER }),
         cell("Unsur Penunjang", {}),
         cell("", {}),
       ]}),
       new TableRow({ children: [
+        cell("", {}),
         cell("JUMLAH", { textOpts: { bold: true } }),
         cell("{integrasiJumlahKonvensional}", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
         cell("JUMLAH", { textOpts: { bold: true } }),
@@ -446,7 +471,7 @@ function sectionIntegrasi() {
   out.push(p(txt(""), { spacing: { after: 120 } }));
   out.push(new Table({
     width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED,
-    columnWidths: [3500, 1800, 1800, 1900],
+    columnWidths: [3600, 1700, 1700, 2000],
     rows: [
       new TableRow({ children: [
         cell("Keterangan", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
@@ -467,8 +492,7 @@ function sectionIntegrasi() {
         cell("0", { align: AlignmentType.CENTER }),
       ]}),
       new TableRow({ children: [
-        cell("III", { align: AlignmentType.CENTER, textOpts: { bold: true } }),
-        cell(["{penetapanKesimpulanPangkat}"], { colSpan: 3, textOpts: { bold: true } }),
+        cell(["III.  {penetapanKesimpulanPangkat}"], { colSpan: 4, textOpts: { bold: true } }),
       ]}),
     ],
   }));
@@ -657,14 +681,15 @@ function sectionPenetapan() {
 }
 
 function build() {
-  // Pastikan placeholder barcode tersedia (dibuat sekali, akan ditukar dengan
-  // barcode asli NIP+Nama secara dinamis oleh js/app.js saat dokumen dibuat).
-  if (!fs.existsSync(BARCODE_PLACEHOLDER_PATH)) {
+  // Pastikan placeholder QR code tersedia (dibuat sekali, akan ditukar dengan
+  // QR asli berisi NIP+Nama+Pangkat/Golongan secara dinamis oleh js/app.js
+  // saat dokumen dibuat).
+  if (!fs.existsSync(QR_PLACEHOLDER_PATH)) {
     const bwipjs = require("bwip-js");
     return bwipjs
-      .toBuffer({ bcid: "code128", text: "PLACEHOLDER", scale: 3, height: 10, includetext: false })
+      .toBuffer({ bcid: "qrcode", text: "PLACEHOLDER", scale: 3, includetext: false })
       .then((png) => {
-        fs.writeFileSync(BARCODE_PLACEHOLDER_PATH, png);
+        fs.writeFileSync(QR_PLACEHOLDER_PATH, png);
         return buildDocument();
       });
   }
